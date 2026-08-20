@@ -16,12 +16,12 @@
    ========================================================================== */
 
 const FIREBASE_CONFIG = {
-  apiKey: 'YOUR_FIREBASE_API_KEY',
-  authDomain: 'YOUR_PROJECT.firebaseapp.com',
-  projectId: 'YOUR_PROJECT_ID',
-  storageBucket: 'YOUR_PROJECT.appspot.com',
-  messagingSenderId: 'YOUR_SENDER_ID',
-  appId: 'YOUR_APP_ID',
+  apiKey: 'AIzaSyDSWaHotMQ-idNgzcieWveAbR4i7UoCy3I',
+  authDomain: 'school-management-30e7d.firebaseapp.com',
+  projectId: 'school-management-30e7d',
+  storageBucket: 'school-management-30e7d.firebasestorage.app',
+  messagingSenderId: '93067659231',
+  appId: '1:93067659231:web:f071729115c5a3f04fe66a',
 };
 
 // The collections synced wholesale between DB.data and Firestore on every
