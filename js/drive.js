@@ -12,7 +12,7 @@
    ========================================================================== */
 
 const DRIVE_CONFIG = {
-  CLIENT_ID: 'YOUR_GOOGLE_OAUTH_CLIENT_ID.apps.googleusercontent.com',
+  CLIENT_ID: '93067659231-7fh7foso247erai2j8v6qvqoj2gmn0g3.apps.googleusercontent.com',
   SCOPE: 'https://www.googleapis.com/auth/drive.file',
   FILE_NAME: 'brightwood-hsms-data.json',
 };
