@@ -181,7 +181,9 @@ function examSeatingHTML() {
         <div class="font-semibold text-sm">${esc(DB.data.exams.find(e=>e.id===chart.examId)?.name || '')} — ${DB.classSectionLabel(chart.classId, chart.sectionId)}</div>
         <div class="text-xs text-slate-400">Room: ${esc(chart.room) || '—'} · ${chart.seatMap.length} seat(s)</div>
       </div>
-      <div class="grid gap-2" style="grid-template-columns: repeat(${cols}, minmax(0,1fr));">${seats}</div>
+      <div class="overflow-x-auto">
+        <div class="grid gap-2" style="grid-template-columns: repeat(${cols}, minmax(64px,1fr)); min-width: ${cols * 64}px;">${seats}</div>
+      </div>
     </div>
   `;
 }
