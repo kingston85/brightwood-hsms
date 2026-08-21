@@ -186,6 +186,23 @@ function seedData() {
     { id: uid('usr'), name: firstNames[0] + ' ' + lastNames[0] + ' (Parent)', username: 'student1', password: 'stud123', role: 'student', email: '', linkedId: students[0].id },
   ];
 
+  // Mirrors what FB.adminCreateAccount() denormalizes onto teachers/students
+  // when a real account is created via Firebase Sync (see firebase-sync.js
+  // for why: a teacher/student can't read someone else's users/{uid} doc
+  // under the real security rules, so Messages needs this link stored
+  // somewhere both sides CAN read). Keeping the seed data consistent with
+  // that means messaging behaves the same in local-storage demo mode as it
+  // does on live Firebase, instead of only being exercised in one of them.
+  users.forEach((u) => {
+    if (u.role === 'teacher' && u.linkedId) {
+      const t = teachers.find(x => x.id === u.linkedId);
+      if (t) t.userId = u.id;
+    } else if (u.role === 'student' && u.linkedId) {
+      const s = students.find(x => x.id === u.linkedId);
+      if (s) s.parentUserId = u.id;
+    }
+  });
+
   // A couple of sample payment submissions so the admin verification queue
   // isn't empty on first look — one still pending, one already verified.
   const paymentSubmissions = [];
@@ -291,6 +308,21 @@ const DB = {
       bankName: '', bankAccountName: '', bankAccountNumber: '', bankBranch: '', paymentInstructions: '',
     };
     this.data.meta = Object.assign({}, metaDefaults, this.data.meta || {});
+
+    // Backfill the userId/parentUserId link Messages relies on (see
+    // messages.js) for accounts created before that link started being
+    // written automatically. Local-storage-only path — the equivalent
+    // backfill for existing Firebase-synced schools is
+    // FB.backfillMessagingLinks() in firebase-sync.js.
+    (this.data.users || []).forEach((u) => {
+      if (u.role === 'teacher' && u.linkedId) {
+        const t = (this.data.teachers || []).find(x => x.id === u.linkedId);
+        if (t && !t.userId) t.userId = u.id;
+      } else if (u.role === 'student' && u.linkedId) {
+        const s = (this.data.students || []).find(x => x.id === u.linkedId);
+        if (s && !s.parentUserId) s.parentUserId = u.id;
+      }
+    });
   },
 
   save() {
