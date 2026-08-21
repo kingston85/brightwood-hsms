@@ -170,7 +170,7 @@ function editUser(id) { openModal(userFormHTML(DB.find('users', id))); wireUserF
 function deleteUser(id) {
   confirmAction('Remove this user account? They will no longer be able to sign in.', async () => {
     if (FB.active) {
-      try { await FB.deleteUserProfile(id); toast('User removed.'); renderUsers(); }
+      try { await FB.deleteUserProfile(DB.find('users', id) || { id }); toast('User removed.'); renderUsers(); }
       catch (err) { console.error(err); toast('Could not remove user — see console.'); }
       return;
     }
