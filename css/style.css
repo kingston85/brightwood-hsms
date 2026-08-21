@@ -1,5 +1,12 @@
 /* Brightwood HSMS — supplemental styles beyond Tailwind utility classes */
 
+/* Safety net for Chart.js canvases: if a chart is ever measured/drawn
+   before its container's final width is known (e.g. on first paint), the
+   pixel width Chart.js bakes into the canvas can be wider than a narrow
+   (mobile) container. This guarantees it can never force the page to
+   scroll horizontally — the canvas scales down visually instead. */
+canvas { max-width: 100%; }
+
 .role-tab.active-role {
   background-color: #4f46e5;
   color: #fff;
