@@ -256,11 +256,27 @@ function approvePaymentSubmission(id) {
     const paidAmount = Math.min(inv.amount, inv.paidAmount + Number(fd.amount));
     DB.update('invoices', inv.id, { paidAmount, method: p.method, paidDate: todayISO() });
     DB.update('paymentSubmissions', id, { status: 'Verified', reviewedBy: Auth.currentUser.name, reviewedAt: todayISO(), reviewNote: '' });
+    notifyPaymentReviewed(p.studentId, inv, 'confirmed');
     closeModal(); toast('Payment confirmed and recorded.'); renderFeesTabBody();
   };
 }
 
+// Email the parent/guardian when their payment submission is confirmed or
+// rejected, so they know without having to check the app.
+function notifyPaymentReviewed(studentId, inv, outcome, reason) {
+  if (typeof FB === 'undefined' || !FB.active) return;
+  const stu = DB.find('students', studentId);
+  if (!stu || !stu.guardianEmail) return;
+  const label = inv ? inv.label : 'your invoice';
+  const body = outcome === 'confirmed'
+    ? `Your payment toward "${label}" for ${stu.firstName} ${stu.lastName} has been confirmed and recorded.\n\nSign in to Brightwood HSMS to see the updated balance.`
+    : `Your payment submission toward "${label}" for ${stu.firstName} ${stu.lastName} could not be confirmed.\n\nReason: "${reason}"\n\nPlease check the details and resubmit, or contact the school office.`;
+  FB.queueEmail(stu.guardianEmail, `Payment ${outcome === 'confirmed' ? 'confirmed' : 'not confirmed'} — ${stu.firstName} ${stu.lastName} — Brightwood HSMS`, body);
+}
+
 function rejectPaymentSubmission(id) {
+  const p = DB.find('paymentSubmissions', id);
+  const inv = p ? DB.find('invoices', p.invoiceId) : null;
   openModal(`
     <form id="rejectPayForm" class="p-6 space-y-4">
       <h3 class="font-bold text-lg">Reject Submission</h3>
@@ -272,6 +288,7 @@ function rejectPaymentSubmission(id) {
     e.preventDefault();
     const fd = Object.fromEntries(new FormData(e.target).entries());
     DB.update('paymentSubmissions', id, { status: 'Rejected', reviewedBy: Auth.currentUser.name, reviewedAt: todayISO(), reviewNote: fd.reviewNote });
+    if (p) notifyPaymentReviewed(p.studentId, inv, 'rejected', fd.reviewNote);
     closeModal(); toast('Submission rejected.'); renderFeesTabBody();
   };
 }
