@@ -17,6 +17,14 @@ const DRIVE_CONFIG = {
   FILE_NAME: 'brightwood-hsms-data.json',
 };
 
+// A "backup" here means the data left the browser it's sitting in — either
+// pushed to Google Drive, or downloaded as a local .json file. Tracked in
+// localStorage (not DB.data) since it's about this device/browser's backup
+// habits, not part of the school data itself, and needs to survive a
+// "Reset to Sample Data" or a switch between local/Firebase modes.
+const LAST_BACKUP_KEY = 'hsms_lastBackupAt';
+const BACKUP_REMINDER_DAYS = 7;
+
 const Drive = {
   tokenClient: null,
   accessToken: null,
@@ -37,7 +45,9 @@ const Drive = {
           this.accessToken = resp.access_token;
           this.connected = true;
           this._setStatus('connected', 'Drive: connected');
-          this.findOrCreateFile().then(() => this.loadFromDrive(true));
+          this.findOrCreateFile()
+            .then(() => this.loadFromDrive(true))
+            .then(() => this.checkBackupReminder());
         }
       },
     });
@@ -109,6 +119,7 @@ const Drive = {
         body,
       });
       this._setStatus('connected', 'Drive: saved ' + new Date().toLocaleTimeString());
+      this._recordBackup();
       if (!silent) toast('Saved to Google Drive.');
     } catch (e) {
       console.error(e);
@@ -140,6 +151,83 @@ const Drive = {
       if (!silent) toast('Could not load from Drive. See console for details.');
     }
   },
+
+  /* ---------------------- Backup reminder tracking ---------------------- */
+
+  // Records that a real, offsite backup just happened (Drive push or local
+  // .json download). Called from saveToDrive() and exportJSONBackup().
+  _recordBackup() {
+    try { localStorage.setItem(LAST_BACKUP_KEY, String(Date.now())); } catch (e) { /* private browsing, etc — not critical */ }
+    this.hideBackupReminder();
+  },
+
+  getLastBackupAt() {
+    try {
+      const raw = localStorage.getItem(LAST_BACKUP_KEY);
+      return raw ? Number(raw) : null;
+    } catch (e) { return null; }
+  },
+
+  daysSinceLastBackup() {
+    const at = this.getLastBackupAt();
+    if (!at) return Infinity; // never backed up
+    return (Date.now() - at) / (1000 * 60 * 60 * 24);
+  },
+
+  needsBackupReminder() {
+    return this.daysSinceLastBackup() >= BACKUP_REMINDER_DAYS;
+  },
+
+  // Called once at admin login, and again whenever Drive successfully
+  // connects mid-session. If Drive is already connected and the last backup
+  // is stale, quietly push a fresh one — no action needed from the admin. If
+  // it's stale and Drive isn't connected, surface a clear banner instead,
+  // since we can't back up anywhere without either Drive or a manual
+  // download. Backups are a whole-school concern, so only admins see this.
+  checkBackupReminder() {
+    if (!Auth.currentUser || Auth.currentUser.role !== 'admin') return;
+    if (!this.needsBackupReminder()) { this.hideBackupReminder(); return; }
+    if (this.connected) {
+      this.saveToDrive(true).then(() => {
+        if (this.getLastBackupAt()) toast('It had been a while, so your data was automatically backed up to Google Drive.');
+      });
+      return;
+    }
+    this.showBackupReminder();
+  },
+
+  showBackupReminder() {
+    const el = document.getElementById('backupReminderBanner');
+    if (!el) return;
+    const never = !this.getLastBackupAt();
+    el.innerHTML = `
+      <div class="bg-amber-50 border-b border-amber-200 px-4 sm:px-6 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm no-print">
+        <span class="text-amber-500 text-base leading-none">⚠️</span>
+        <span class="text-amber-800 flex-1 min-w-0">
+          ${never ? "Your school's data has never been backed up." : `It's been over ${BACKUP_REMINDER_DAYS} days since your last backup.`}
+          Protect against a lost device or cleared browser storage by connecting Google Drive or downloading a backup file.
+        </span>
+        <button class="btn btn-primary btn-sm" onclick="Drive.connect()">Connect Google Drive</button>
+        <button class="btn btn-secondary btn-sm" onclick="exportJSONBackup()">Download Backup Now</button>
+        <button class="text-amber-500 hover:text-amber-700 text-lg leading-none px-1" onclick="Drive.dismissBackupReminder()" aria-label="Dismiss" title="Dismiss for now">&times;</button>
+      </div>
+    `;
+    el.classList.remove('hidden');
+  },
+
+  hideBackupReminder() {
+    const el = document.getElementById('backupReminderBanner');
+    if (!el) return;
+    el.classList.add('hidden');
+    el.innerHTML = '';
+  },
+
+  // Dismissing only hides it for the rest of this sign-in — it isn't marked
+  // as backed up, so it reappears next time they log in until an actual
+  // backup happens.
+  dismissBackupReminder() {
+    this.hideBackupReminder();
+  },
 };
 
 /* ------------------------ Local JSON export / import (no OAuth needed) ---- */
@@ -154,6 +242,7 @@ function exportJSONBackup() {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+  Drive._recordBackup();
   toast('Backup file downloaded.');
 }
 
