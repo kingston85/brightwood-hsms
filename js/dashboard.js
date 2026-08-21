@@ -67,10 +67,19 @@ function renderAdminDashboard() {
     </div>
   `;
 
-  drawEnrollmentChart();
-  drawGenderChart();
-  drawAttendanceTrendChart();
-  drawFeesChart();
+  // Deferred to the next paint frame: drawing synchronously right after
+  // setting innerHTML can measure the canvas's container BEFORE the
+  // browser (and, on the CDN build, Tailwind's own runtime class-scanner)
+  // has finished applying styles to this brand-new markup — Chart.js then
+  // bakes that stale, sometimes too-wide, measurement into the canvas's
+  // pixel width, which can overflow a narrow (mobile) container. Waiting a
+  // frame guarantees layout has settled first.
+  requestAnimationFrame(() => {
+    drawEnrollmentChart();
+    drawGenderChart();
+    drawAttendanceTrendChart();
+    drawFeesChart();
+  });
 }
 
 /* ------------------------------ Shared widgets ------------------------------ */
@@ -174,7 +183,7 @@ function drawEnrollmentChart() {
   ChartRegistry.enrollment = new Chart(ctx, {
     type: 'bar',
     data: { labels, datasets: [{ label: 'Students', data, backgroundColor: '#6366f1', borderRadius: 6 }] },
-    options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } },
+    options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } },
   });
 }
 
@@ -188,7 +197,7 @@ function drawGenderChart() {
   ChartRegistry.gender = new Chart(ctx, {
     type: 'doughnut',
     data: { labels: ['Male', 'Female'], datasets: [{ data: [male, female], backgroundColor: ['#6366f1', '#f59e0b'] }] },
-    options: { plugins: { legend: { position: 'bottom' } } },
+    options: { responsive: true, plugins: { legend: { position: 'bottom' } } },
   });
 }
 
@@ -206,7 +215,7 @@ function drawAttendanceTrendChart() {
   ChartRegistry.attendance = new Chart(ctx, {
     type: 'line',
     data: { labels: dates, datasets: [{ label: 'Attendance %', data: rates, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,.15)', fill: true, tension: .3 }] },
-    options: { plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 100 } } },
+    options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 100 } } },
   });
 }
 
@@ -220,7 +229,7 @@ function drawFeesChart() {
   ChartRegistry.fees = new Chart(ctx, {
     type: 'doughnut',
     data: { labels: ['Collected', 'Outstanding'], datasets: [{ data: [collected, outstanding], backgroundColor: ['#10b981', '#ef4444'] }] },
-    options: { plugins: { legend: { position: 'bottom' } } },
+    options: { responsive: true, plugins: { legend: { position: 'bottom' } } },
   });
 }
 
@@ -241,13 +250,13 @@ function renderTeacherDashboard() {
       ${statCard('🎓', 'My Students', studentCount, 'emerald')}
       ${statCard('🗓️', "Today's Periods", todaysClasses.length, 'amber')}
     </div>
-    <div class="card p-5">
+    <div class="card p-5 overflow-x-auto">
       <h3 class="font-bold mb-3">Today's Schedule (${dayShort})</h3>
       ${todaysClasses.length ? `<table class="data-table"><thead><tr><th>Period</th><th>Time</th><th>Section</th><th>Subject</th></tr></thead><tbody>
         ${todaysClasses.map(c => `<tr><td>P${c.period}</td><td>${esc(c.time)}</td><td>${DB.classSectionLabel(c.classId,c.sectionId)}</td><td>${DB.subjectName(c.subjectId)}</td></tr>`).join('')}
       </tbody></table>` : '<p class="text-slate-400 text-sm">No classes scheduled today.</p>'}
     </div>
-    <div class="card p-5">
+    <div class="card p-5 overflow-x-auto">
       <h3 class="font-bold mb-3">My Sections</h3>
       <table class="data-table"><thead><tr><th>Class</th><th>Section</th><th>Role</th><th>Students</th><th>Avg. Attendance</th></tr></thead><tbody>
         ${sections.map(s => {
@@ -290,7 +299,7 @@ function renderStudentDashboard() {
       ${statCard('📚', 'Average Score', (avg ?? '—') + (avg!==null?'%':''), 'brand')}
       ${statCard('💵', 'Fee Balance', money(balance), balance > 0 ? 'red' : 'emerald')}
     </div>
-    <div class="card p-5">
+    <div class="card p-5 overflow-x-auto">
       <h3 class="font-bold mb-3">Today's Schedule (${dayShort})</h3>
       ${todaysClasses.length ? `<table class="data-table"><thead><tr><th>Period</th><th>Time</th><th>Subject</th><th>Teacher</th></tr></thead><tbody>
         ${todaysClasses.map(c => `<tr><td>P${c.period}</td><td>${esc(c.time)}</td><td>${DB.subjectName(c.subjectId)}</td><td>${DB.teacherName(c.teacherId)}</td></tr>`).join('')}
