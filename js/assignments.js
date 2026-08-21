@@ -332,12 +332,29 @@ function wireSubmissionsReview(assignmentId) {
     btn.onclick = () => {
       const id = btn.dataset.markReviewed;
       const feedbackInput = document.querySelector(`[data-feedback-for="${id}"]`);
-      DB.update('submissions', id, { status: 'Reviewed', feedback: feedbackInput ? feedbackInput.value : '', reviewedAt: new Date().toISOString() });
+      const feedback = feedbackInput ? feedbackInput.value : '';
+      DB.update('submissions', id, { status: 'Reviewed', feedback, reviewedAt: new Date().toISOString() });
       toast('Marked reviewed.');
+      notifySubmissionReviewed(id, assignmentId, feedback);
       openSubmissionsReview(assignmentId);
       renderAssignments();
     };
   });
+}
+
+// Email the parent/guardian once a teacher marks a submission reviewed, so
+// they don't have to keep checking the app to see feedback come in.
+function notifySubmissionReviewed(submissionId, assignmentId, feedback) {
+  if (typeof FB === 'undefined' || !FB.active) return;
+  const sub = DB.find('submissions', submissionId);
+  const assignment = DB.find('assignments', assignmentId);
+  if (!sub) return;
+  const stu = DB.find('students', sub.studentId);
+  if (!stu || !stu.guardianEmail) return;
+  const body = `${stu.firstName} ${stu.lastName}'s submission for "${assignment ? assignment.title : 'an assignment'}" has been reviewed by ${Auth.currentUser.name}.`
+    + (feedback ? `\n\nFeedback: "${feedback}"` : '')
+    + `\n\nSign in to Brightwood HSMS to see the full details.`;
+  FB.queueEmail(stu.guardianEmail, `Assignment reviewed — ${stu.firstName} ${stu.lastName} — Brightwood HSMS`, body);
 }
 
 function addDaysISO(iso, days) {
