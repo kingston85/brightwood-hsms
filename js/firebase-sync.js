@@ -43,6 +43,8 @@ const FB = {
   unsubscribers: [],
   lastKnownRemote: {},
   lastKnownRemoteMeta: null,
+  listenerStatus: {}, // per-collection 'ok' | 'error' — used by runDiagnostics()
+  listenerErrors: {}, // per-collection last error message, when status is 'error'
   _pushing: false,
   _pendingPush: null,
 
@@ -123,6 +125,20 @@ const FB = {
       name, email: email.trim(), role, linkedId: linkedId || null, assignedSectionIds: assignedSectionIds || [],
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
+    // Denormalize the login account's uid onto the teacher/student record it
+    // links to. This is what lets Messages find "who to message" WITHOUT
+    // reading the users collection directly — firestore.rules only lets a
+    // user read their OWN users/{uid} doc, so a teacher has no way to look
+    // up a parent's account (or vice versa) there. students/{id} and
+    // teachers/{id} are readable more broadly (by section / by anyone
+    // signed in), so storing the link there instead is what makes
+    // messaging actually work under real security rules, not just in the
+    // no-rules local-storage demo mode.
+    if (linkedId && role === 'teacher') {
+      await this.db.collection('teachers').doc(linkedId).set({ userId: uid }, { merge: true });
+    } else if (linkedId && role === 'student') {
+      await this.db.collection('students').doc(linkedId).set({ parentUserId: uid }, { merge: true });
+    }
     return uid;
   },
 
@@ -130,12 +146,70 @@ const FB = {
     await this.db.collection('users').doc(uid).update(patch);
   },
 
-  async deleteUserProfile(uid) {
+  async deleteUserProfile(user) {
     // Removes their Firestore profile (revokes app access immediately).
     // Deleting the underlying Firebase Auth account requires the Admin SDK
     // (a server) or the user's own re-authentication, so it isn't done from
     // this client-only app — see README.md "Security notes".
-    await this.db.collection('users').doc(uid).delete();
+    await this.db.collection('users').doc(user.id).delete();
+    // Clear the denormalized link set by adminCreateAccount above, so a
+    // removed account doesn't linger as a dead messaging target.
+    if (user.linkedId && user.role === 'teacher') {
+      await this.db.collection('teachers').doc(user.linkedId).set({ userId: null }, { merge: true });
+    } else if (user.linkedId && user.role === 'student') {
+      await this.db.collection('students').doc(user.linkedId).set({ parentUserId: null }, { merge: true });
+    }
+  },
+
+  // One-time self-healing pass for schools that were already using
+  // Firebase Sync before the userId/parentUserId denormalization above
+  // existed: without it, teacher/student accounts created earlier have no
+  // link for Messages to find, so eligibleMessagePartners() would find
+  // nobody even though the accounts are otherwise fine. Only an admin can
+  // read every users/{uid} doc (see firestore.rules), so this only runs —
+  // once per admin sign-in, quietly — while signed in as admin, which is
+  // exactly the account that CAN see the full picture needed to fix it.
+  async backfillMessagingLinks() {
+    if (!this.active || !this.db || !this.currentProfile || this.currentProfile.role !== 'admin') return;
+    try {
+      const batch = this.db.batch();
+      let count = 0;
+      (DB.data.users || []).forEach((u) => {
+        if (u.role === 'teacher' && u.linkedId) {
+          const t = DB.find('teachers', u.linkedId);
+          if (t && !t.userId) { batch.set(this.db.collection('teachers').doc(u.linkedId), { userId: u.id }, { merge: true }); count++; }
+        } else if (u.role === 'student' && u.linkedId) {
+          const s = DB.find('students', u.linkedId);
+          if (s && !s.parentUserId) { batch.set(this.db.collection('students').doc(u.linkedId), { parentUserId: u.id }, { merge: true }); count++; }
+        }
+      });
+      if (count) await batch.commit();
+    } catch (e) {
+      console.error('backfillMessagingLinks failed:', e);
+    }
+  },
+
+  // Email notifications: writes a document shaped for Firebase's official
+  // "Trigger Email from Firestore" Extension — install it (Firebase Console
+  // → Extensions), point it at the "mail" collection, and give it your
+  // SMTP details (see README.md → "Email Notifications"). Without the
+  // extension installed, these documents just sit in Firestore unsent —
+  // harmless, but no email actually goes out. Silently does nothing when
+  // Firebase Sync isn't active or the recipient has no email on file, since
+  // most of this app's email addresses (a guardian's, in particular) are
+  // optional fields that may not be filled in yet.
+  async queueEmail(to, subject, text) {
+    if (!this.active || !this.db || !to) return;
+    try {
+      await this.db.collection('mail').add({
+        to: [to],
+        message: { subject, text },
+      });
+    } catch (e) {
+      // Never let a notification failure block the real action (sending a
+      // message, reviewing homework, etc.) that triggered it.
+      console.error('Failed to queue email notification:', e);
+    }
   },
 
   async _onAuthStateChanged(user) {
@@ -166,6 +240,11 @@ const FB = {
       this._startListeners();
       this._setStatus('live', 'Firebase: live sync');
       enterApp();
+      if (profile.role === 'admin') {
+        // Give the teachers/students/users listeners a moment to receive
+        // their initial snapshots before checking what needs backfilling.
+        setTimeout(() => this.backfillMessagingLinks(), 2500);
+      }
     } else {
       this.active = false;
       this.currentProfile = null;
@@ -181,6 +260,8 @@ const FB = {
     DB.data = DB.data || {};
     this.lastKnownRemote = {};
     this.lastKnownRemoteMeta = null;
+    this.listenerStatus = {};
+    this.listenerErrors = {};
 
     this.unsubscribers.push(this.db.collection('meta').doc('school').onSnapshot((doc) => {
       if (doc.exists) {
@@ -199,10 +280,14 @@ const FB = {
           return { id: d.id, ...docData };
         });
         this.lastKnownRemote[col] = map;
+        this.listenerStatus[col] = 'ok';
+        delete this.listenerErrors[col];
         if (window.renderCurrentView) renderCurrentView();
         document.dispatchEvent(new CustomEvent('hsms:data-changed'));
       }, (err) => {
         console.error(`Firestore listener error on ${col}:`, err);
+        this.listenerStatus[col] = 'error';
+        this.listenerErrors[col] = (err && (err.message || err.code)) || String(err);
       }));
     });
 
@@ -251,6 +336,18 @@ const FB = {
   // collection together, re-writing an untouched-but-now-locked record
   // alongside a real edit would get the *entire* batch rejected — breaking
   // saves for that user from then on, not just that one record.
+  // Turns a Firestore error into something a non-technical admin can act on,
+  // instead of a raw error code.
+  _friendlyError(e) {
+    const code = (e && e.code) || '';
+    if (code === 'permission-denied') return 'blocked by Firestore security rules (rules may be out of date — check Settings → Firebase Sync → Run Diagnostics)';
+    if (code === 'unavailable') return 'could not reach Firestore (check your internet connection)';
+    if (code === 'resource-exhausted') return 'hit Firestore\'s usage quota';
+    if (code === 'unauthenticated') return 'your sign-in has expired — sign in again';
+    if (code === 'invalid-argument') return 'contained a value Firestore rejected';
+    return (e && e.message) || String(e) || 'an unknown error';
+  },
+
   async pushAll(data) {
     if (!this.active || !this.db) return;
     if (this._pushing) { this._pendingPush = data; return; }
@@ -258,7 +355,7 @@ const FB = {
     this._setStatus('busy', 'Firebase: saving…');
     try {
       const batch = this.db.batch();
-      let writeCount = 0;
+      const ops = []; // mirrors the batch, so we can retry item-by-item if the batch fails
 
       // meta/school is admin-only to write (see firestore.rules) — including
       // it in every save() batch regardless of who's saving would get a
@@ -270,7 +367,7 @@ const FB = {
         const { id, ...metaRest } = data.meta || {};
         if (!this._deepEqual(this.lastKnownRemoteMeta || {}, metaRest)) {
           batch.set(this.db.collection('meta').doc('school'), metaRest, { merge: true });
-          writeCount++;
+          ops.push({ type: 'set', col: 'meta', id: 'school', data: metaRest, label: 'School information' });
         }
       }
 
@@ -283,22 +380,61 @@ const FB = {
           const remote = remoteMap[id];
           if (remote !== undefined && this._deepEqual(remote, rest)) return; // unchanged — skip
           batch.set(this.db.collection(col).doc(item.id), rest);
-          writeCount++;
+          ops.push({ type: 'set', col, id: item.id, data: rest, label: col });
         });
         remoteIds.forEach((rid) => {
-          if (!localIds.has(rid)) { batch.delete(this.db.collection(col).doc(rid)); writeCount++; }
+          if (!localIds.has(rid)) { batch.delete(this.db.collection(col).doc(rid)); ops.push({ type: 'delete', col, id: rid, label: col }); }
         });
       });
 
-      if (writeCount > 0) {
+      if (ops.length === 0) {
+        this._setStatus('live', 'Firebase: live sync');
+        return;
+      }
+
+      try {
         await batch.commit();
         this._setStatus('live', 'Firebase: saved ' + new Date().toLocaleTimeString());
-      } else {
-        this._setStatus('live', 'Firebase: live sync');
+      } catch (batchErr) {
+        // The batch is all-or-nothing, so one blocked record (e.g. one the
+        // current user isn't allowed to touch) takes everything else down
+        // with it. Retry each change individually so anything that *is*
+        // allowed still gets saved, and we can name exactly what didn't.
+        console.error('Firebase batch save failed, retrying individually:', batchErr);
+        const failed = [];
+        let succeeded = 0;
+        for (const op of ops) {
+          try {
+            const ref = this.db.collection(op.col).doc(op.id);
+            if (op.type === 'delete') await ref.delete();
+            else await ref.set(op.data);
+            succeeded++;
+          } catch (itemErr) {
+            failed.push({ ...op, reason: this._friendlyError(itemErr) });
+          }
+        }
+
+        if (failed.length === 0) {
+          // Transient batch-level failure (e.g. a dropped connection) —
+          // every change made it through once retried individually.
+          this._setStatus('live', 'Firebase: saved ' + new Date().toLocaleTimeString());
+          toast('Saved (recovered automatically after a brief hiccup).', { type: 'success' });
+        } else {
+          const uniqueCols = [...new Set(failed.map((f) => f.label))];
+          const reason = failed[0].reason;
+          this._setStatus('error', `Firebase: ${failed.length} change(s) blocked`);
+          toast(
+            succeeded > 0
+              ? `Saved ${succeeded} change(s). Could NOT save changes to: ${uniqueCols.join(', ')} — ${reason}.`
+              : `Nothing was saved. Changes to ${uniqueCols.join(', ')} were ${reason}.`,
+            { type: 'error', duration: 9000 }
+          );
+        }
       }
     } catch (e) {
       console.error('Firebase pushAll failed:', e);
-      this._setStatus('error', 'Firebase: save failed (see console)');
+      this._setStatus('error', 'Firebase: save failed');
+      toast(`Save failed: ${this._friendlyError(e)}.`, { type: 'error', duration: 9000 });
     } finally {
       this._pushing = false;
       if (this._pendingPush) {
@@ -307,5 +443,75 @@ const FB = {
         this.pushAll(next);
       }
     }
+  },
+
+  // Self-service health check for Settings → Firebase Sync. Written for a
+  // non-technical admin to run themselves instead of opening the browser
+  // console: each check is plain-English, and the most common real-world
+  // failure (firestore.rules on the Firebase Console being out of date
+  // relative to the app) is called out by name rather than as a generic
+  // "permission denied."
+  async runDiagnostics() {
+    const results = [];
+
+    results.push({
+      check: 'Firebase project configured',
+      status: this.isConfigured() ? 'pass' : 'fail',
+      message: this.isConfigured()
+        ? 'A real Firebase project is configured in js/firebase-sync.js.'
+        : 'js/firebase-sync.js still has placeholder config values — see README.md → "Firebase Setup".',
+    });
+    if (!this.isConfigured()) return results;
+
+    results.push({
+      check: 'Signed in with a live Firebase account',
+      status: this.active ? 'pass' : 'fail',
+      message: this.active
+        ? `Connected as ${(this.currentProfile && this.currentProfile.email) || 'unknown'}.`
+        : 'Not currently signed in with a Firebase account — sign in via "Shared Firebase Account" on the login screen.',
+    });
+    if (!this.active) return results;
+
+    const role = this.currentProfile && this.currentProfile.role;
+    results.push({
+      check: 'Signed-in account is an admin',
+      status: role === 'admin' ? 'pass' : 'warn',
+      message: role === 'admin'
+        ? 'Confirmed admin access.'
+        : `Signed in as role "${role}" — the remaining checks below need an admin account to fully verify.`,
+    });
+
+    const badCollections = FB_COLLECTIONS.filter((col) => this.listenerStatus[col] !== 'ok');
+    results.push({
+      check: 'All data collections are readable',
+      status: badCollections.length ? 'fail' : 'pass',
+      message: badCollections.length
+        ? `These aren't syncing: ${badCollections.join(', ')}. This almost always means the firestore.rules published in the Firebase Console are older than the app — paste in the latest firestore.rules (Firebase Console → Firestore Database → Rules) and click Publish, then run this check again.`
+        : 'Every collection the app uses is syncing correctly.',
+    });
+    if (badCollections.length) {
+      const detail = badCollections
+        .filter((col) => this.listenerErrors[col])
+        .map((col) => `${col}: ${this.listenerErrors[col]}`)
+        .join(' | ');
+      if (detail) results.push({ check: 'Error detail', status: 'warn', message: detail });
+    }
+
+    if (role === 'admin') {
+      try {
+        const ref = this.db.collection('events').doc('__diagnostic_test__');
+        await ref.set({ title: 'Diagnostic test — safe to ignore', date: new Date().toISOString(), __diagnosticTest: true });
+        await ref.delete();
+        results.push({ check: 'Live write test', status: 'pass', message: 'Successfully wrote and removed a test record in Firestore — saving works end to end.' });
+      } catch (e) {
+        results.push({
+          check: 'Live write test',
+          status: 'fail',
+          message: `Writing to Firestore failed: ${(e && (e.message || e.code)) || e}. Re-check that firestore.rules is published and that this account's role is set to "admin" in its users/{uid} profile.`,
+        });
+      }
+    }
+
+    return results;
   },
 };
