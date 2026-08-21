@@ -2,6 +2,12 @@
    Brightwood HSMS — Backup, Sync & School Settings (Admin only)
    ========================================================================== */
 
+function lastBackupLabel() {
+  const at = Drive.getLastBackupAt();
+  if (!at) return 'Last backup: never — see "Local Backup File" or "Google Drive Sync" below.';
+  return `Last backup: ${new Date(at).toLocaleString()}`;
+}
+
 function renderSettings() {
   const meta = DB.data.meta;
   document.getElementById('mainContent').innerHTML = `
@@ -27,6 +33,12 @@ function renderSettings() {
           : FB.isConfigured()
             ? `<p class="text-xs text-amber-600">Configured, but you're signed in with a local demo account. Sign out and use the "Shared Firebase Account" panel on the login screen to connect.</p>`
             : `<p class="text-xs text-slate-400">No Firebase project configured yet — add one in js/firebase-sync.js (see README.md).</p>`}
+        ${FB.isConfigured() ? `
+        <div class="mt-4 pt-4 border-t border-slate-100">
+          <button class="btn btn-secondary btn-sm" onclick="runFirebaseDiagnostics()">🩺 Run Diagnostics</button>
+          <p class="text-xs text-slate-400 mt-2">Checks your setup step by step and explains any problem in plain English — no browser console needed.</p>
+          <div id="diagResults" class="mt-3 space-y-2"></div>
+        </div>` : ''}
       </div>
 
       <div class="card p-5 lg:col-span-2">
@@ -68,6 +80,7 @@ function renderSettings() {
           <button class="btn btn-secondary" onclick="Drive.disconnect()">Disconnect</button>
         </div>
         <p class="text-xs ${Drive.isConfigured() ? 'text-emerald-600' : 'text-amber-600'}">${Drive.isConfigured() ? 'OAuth Client ID is configured.' : 'No OAuth Client ID configured yet — add one in js/drive.js (see README.md).'}</p>
+        <p class="text-xs ${Drive.needsBackupReminder() ? 'text-amber-600' : 'text-slate-400'} mt-2">${lastBackupLabel()}${Drive.needsBackupReminder() ? ' — connecting Drive or downloading a backup below will clear this.' : ''}</p>
       </div>
 
       <div class="card p-5">
@@ -105,6 +118,29 @@ function renderSettings() {
     DB.save();
     toast('Payment settings updated.');
   };
+}
+
+async function runFirebaseDiagnostics() {
+  const wrap = document.getElementById('diagResults');
+  if (!wrap) return;
+  wrap.innerHTML = `<p class="text-xs text-slate-400 flex items-center gap-2"><span class="animate-pulse">●</span> Running checks…</p>`;
+  let results;
+  try {
+    results = await FB.runDiagnostics();
+  } catch (e) {
+    wrap.innerHTML = `<p class="text-xs text-red-600">Diagnostics itself failed to run: ${esc((e && e.message) || String(e))}</p>`;
+    return;
+  }
+  const icon = (s) => s === 'pass' ? '✅' : s === 'warn' ? '⚠️' : '❌';
+  wrap.innerHTML = results.map(r => `
+    <div class="flex items-start gap-2 text-xs p-2 rounded-lg ${r.status === 'pass' ? 'bg-emerald-50' : r.status === 'warn' ? 'bg-amber-50' : 'bg-red-50'}">
+      <span>${icon(r.status)}</span>
+      <div>
+        <div class="font-semibold">${esc(r.check)}</div>
+        <div class="text-slate-500 mt-0.5">${esc(r.message)}</div>
+      </div>
+    </div>
+  `).join('');
 }
 
 function resetAllData() {
