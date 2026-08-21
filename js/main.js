@@ -117,6 +117,11 @@ function enterApp() {
   currentRoute = ROUTES.find(r => r.roles.includes(u.role)) ? 'dashboard' : ROUTES[0].id;
   renderNav();
   navigate('dashboard');
+
+  // Give Drive.init()'s own async token/file setup a moment to settle before
+  // checking — backups are admin-only, Drive.checkBackupReminder() no-ops
+  // for everyone else.
+  setTimeout(() => { if (typeof Drive !== 'undefined') Drive.checkBackupReminder(); }, 1500);
 }
 
 function wireShell() {
@@ -125,6 +130,7 @@ function wireShell() {
     document.getElementById('appShell').classList.add('hidden');
     document.getElementById('loginScreen').classList.remove('hidden');
     document.getElementById('firebaseForm')?.reset();
+    if (typeof Drive !== 'undefined') Drive.hideBackupReminder();
   });
 
   document.getElementById('menuToggle').addEventListener('click', () => {
