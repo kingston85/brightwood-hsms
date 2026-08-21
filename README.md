@@ -200,6 +200,48 @@ free for a school-sized amount of data. One-time setup, about 15 minutes:
 From here on, sign in with the **Shared Firebase Account** panel (not the
 local demo tabs) to see and edit the live, shared data from any device.
 
+### Email Notifications (optional, requires Firebase Setup above)
+
+Once Firebase Sync is on, the app can automatically email parents/guardians
+when something happens that they'd want to know about without opening the
+app: a new direct message from a teacher, a homework submission being
+marked reviewed (with the teacher's feedback), or a submitted payment being
+confirmed or rejected. It uses a guardian's email as recorded on the
+student's record (**Students → Edit → Guardian Email**) — if that field is
+blank, that student's notifications are silently skipped, nothing else is
+affected.
+
+The app never sends email directly (a browser can't do that safely) — it
+writes a small "please send this" document to a `mail` collection in
+Firestore, and Firebase's own official **Trigger Email from Firestore**
+Extension watches that collection and does the actual sending through your
+SMTP provider. One-time setup, about 10 minutes:
+
+1. In the [Firebase Console](https://console.firebase.google.com/), open
+   your project and go to **Build → Extensions → Explore extensions**,
+   then find and install **Trigger Email from Firestore** (by Firebase).
+2. During install, you'll be asked for SMTP connection details (host, port,
+   username, password) and a default "from" address. Any SMTP provider
+   works — a school Gmail account with an
+   [App Password](https://support.google.com/accounts/answer/185833), or a
+   transactional email service like SendGrid, Mailgun, or Brevo (all have
+   free tiers plenty big enough for a school).
+3. Set the **Collection path** the extension watches to `mail` — this must
+   match exactly, since that's the collection name `js/firebase-sync.js`
+   writes to.
+4. Finish the install. From then on, any document the app writes to `mail`
+   is picked up and sent automatically, usually within a few seconds — no
+   further configuration or app changes needed.
+
+The `firestore.rules` in this project already includes a `/mail/{id}` rule
+that lets any signed-in user *create* a document there (so the app can
+queue a notification), but nobody — not even an admin — can read, edit, or
+delete one back out; only the Extension's own server-side access (which
+bypasses these rules entirely) processes them. If you skip this setup, the
+app still works exactly as before — the `mail` documents just accumulate
+unsent in Firestore, harmless but doing nothing, until you either install
+the Extension or periodically clear that collection out yourself.
+
 ### Connecting Google Drive
 
 Google requires every app that uses Sign-In or Drive access to be
@@ -235,6 +277,24 @@ registered with your own free Google Cloud project — this is a one-time,
 Without this setup, the app works fully using local storage and manual
 backup/restore — Google Drive is an optional convenience layer, not a
 requirement.
+
+### Backup reminders
+
+Whoever's browser this app runs in keeps track of the last time its data
+was actually backed up somewhere else — a Drive push or a downloaded
+`.json` file both count. Each time an admin signs in, the app checks that
+timestamp: if Drive is already connected and it's been more than 7 days,
+it quietly backs up to Drive on its own and lets you know with a toast; if
+it's been more than 7 days and Drive isn't connected, a dismissible amber
+banner appears at the top of the screen with one-click buttons to connect
+Drive or download a backup file. Dismissing the banner only clears it for
+that sign-in — it comes back next login until an actual backup happens.
+This is separate from the "auto-saves every 2 minutes while connected"
+behavior above, which only runs while Drive is already connected in that
+same browser tab; the reminder exists for the far more common case of a
+school that hasn't connected Drive at all, or whose admin only opens the
+app occasionally. **Settings → Google Drive Sync** always shows the exact
+last-backup time.
 
 ## Online Fee Payment
 
