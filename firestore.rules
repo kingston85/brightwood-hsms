@@ -1,0 +1,236 @@
+// ============================================================================
+// Brightwood HSMS — Firestore Security Rules
+//
+// Paste this into Firebase Console → Firestore Database → Rules, and click
+// "Publish". These rules are what actually enforces role-based access once
+// Firebase Sync is turned on — the app's UI role-gating is just a
+// convenience on top of this; a technically determined user cannot bypass
+// what's written here (unlike the local-storage demo mode, where they can).
+//
+// Data model this assumes (see js/firebase-sync.js / README.md):
+//   users/{uid}        -> { name, email, role: 'admin'|'teacher'|'student',
+//                            linkedId, assignedSectionIds: [sectionId, ...] }
+//   meta/school         -> school name/term/year (one document)
+//   meta/bootstrap       -> { adminCreated: bool } — one-time first-admin gate
+//   students/{id}, teachers/{id}, classes/{id}, subjects/{id},
+//   timetable/{id}, exams/{id}, feeStructure/{id}
+//   attendance/{id}     -> includes studentId + sectionId
+//   grades/{id}         -> includes studentId + sectionId (denormalized by the
+//                            app for exactly this rule check)
+//   invoices/{id}       -> includes studentId
+//
+// This is a solid starting point for a small school's own trusted staff —
+// not a formally audited security artifact. Use the Rules Playground in the
+// Firebase Console to test it against your own data before relying on it,
+// and treat any student PII rules with extra care if you're bound by local
+// data-protection law.
+// ============================================================================
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function myProfile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    function myRole() {
+      return isSignedIn() ? myProfile().role : null;
+    }
+    function isAdmin() {
+      return isSignedIn() && myRole() == 'admin';
+    }
+    function isTeacher() {
+      return isSignedIn() && myRole() == 'teacher';
+    }
+    function isStudent() {
+      return isSignedIn() && myRole() == 'student';
+    }
+    function myLinkedId() {
+      return isSignedIn() ? myProfile().linkedId : null;
+    }
+    function mySections() {
+      return isSignedIn() ? myProfile().assignedSectionIds : [];
+    }
+
+    // ---- One-time first-admin bootstrap flag -----------------------------
+    match /meta/bootstrap {
+      allow read: if true; // just a boolean flag, no sensitive data
+      // Flip false -> true exactly once, by whoever is creating the first
+      // admin account (paired, in the same batch, with creating their
+      // users/{uid} doc below).
+      allow update: if isSignedIn()
+        && resource.data.adminCreated == false
+        && request.resource.data.adminCreated == true;
+      allow write: if isAdmin();
+    }
+
+    match /meta/school {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // ---- User accounts / profiles ----------------------------------------
+    match /users/{uid} {
+      allow read: if isAdmin() || request.auth.uid == uid;
+      allow create: if isAdmin()
+        // First-admin bootstrap: a brand-new signed-in user may create
+        // their OWN profile as 'admin', but only while no admin exists yet.
+        || (request.auth.uid == uid
+            && request.resource.data.role == 'admin'
+            && get(/databases/$(database)/documents/meta/bootstrap).data.adminCreated == false);
+      allow update, delete: if isAdmin();
+    }
+
+    // ---- Reference data (admin-managed, everyone signed in can read) -----
+    match /subjects/{id}      { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /teachers/{id}      { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /classes/{id}       { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /timetable/{id}     { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /exams/{id}         { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /examSchedule/{id}  { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /examSeating/{id}   { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /feeStructure/{id}  { allow read: if isSignedIn(); allow write: if isAdmin(); }
+
+    // ---- Students: admin full access; teachers scoped to their assigned
+    //      sections; a student/parent can only see their own record --------
+    match /students/{studentId} {
+      allow read: if isAdmin()
+        || (isTeacher() && resource.data.sectionId in mySections())
+        || (isStudent() && myLinkedId() == studentId);
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (isTeacher() && resource.data.sectionId in mySections());
+    }
+
+    // ---- Attendance: same section-scoping as students ---------------------
+    match /attendance/{id} {
+      allow read: if isAdmin()
+        || (isTeacher() && resource.data.sectionId in mySections())
+        || (isStudent() && resource.data.studentId == myLinkedId());
+      allow create: if isAdmin() || (isTeacher() && request.resource.data.sectionId in mySections());
+      allow update: if isAdmin() || (isTeacher() && resource.data.sectionId in mySections());
+      allow delete: if isAdmin();
+    }
+
+    // ---- Grades: same section-scoping (sectionId is denormalized onto the
+    //      grade record by the app when it's saved) ------------------------
+    match /grades/{id} {
+      allow read: if isAdmin()
+        || (isTeacher() && resource.data.sectionId in mySections())
+        || (isStudent() && resource.data.studentId == myLinkedId());
+      allow create: if isAdmin() || (isTeacher() && request.resource.data.sectionId in mySections());
+      allow update: if isAdmin() || (isTeacher() && resource.data.sectionId in mySections());
+      allow delete: if isAdmin();
+    }
+
+    // ---- Invoices/fees: admin manages; a student/parent reads only their
+    //      own invoices (billing is not a teacher's concern in this app) --
+    match /invoices/{id} {
+      allow read: if isAdmin() || (isStudent() && resource.data.studentId == myLinkedId());
+      allow write: if isAdmin();
+    }
+
+    // ---- Payment submissions (Mobile Money / Bank Transfer "pay & verify"
+    //      flow): a student/parent may create ONLY their own, always starting
+    //      as 'Pending' (they cannot self-approve); only admin can read
+    //      others', or update/delete (i.e. approve/reject) any submission. --
+    match /paymentSubmissions/{id} {
+      allow read: if isAdmin() || (isStudent() && resource.data.studentId == myLinkedId());
+      allow create: if isAdmin()
+        || (isStudent() && request.resource.data.studentId == myLinkedId() && request.resource.data.status == 'Pending');
+      allow update, delete: if isAdmin();
+    }
+
+    // ---- Stripe payment audit log: written ONLY by the stripeWebhook Cloud
+    //      Function via the Admin SDK (which bypasses these rules entirely),
+    //      never by any client. Admin can read it for reference; nobody can
+    //      write to it from the app. -----------------------------------------
+    match /stripePayments/{id} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // ---- Announcements / Notice Board: not sensitive PII, so everyone
+    //      signed in may read (the app's UI filters by audience/section for
+    //      relevance, not security). A teacher may only post/edit/delete
+    //      their own section-targeted announcements; admin manages all. ----
+    match /announcements/{id} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin()
+        || (isTeacher() && request.resource.data.audience == 'Section'
+            && request.resource.data.sectionId in mySections()
+            && request.resource.data.createdBy == request.auth.uid);
+      allow update, delete: if isAdmin() || (isTeacher() && resource.data.createdBy == request.auth.uid);
+    }
+
+    // ---- Assignments / Homework: same section-scoping as attendance/grades
+    match /assignments/{id} {
+      allow read: if isAdmin()
+        || (isTeacher() && resource.data.sectionId in mySections())
+        || isStudent();
+      allow create: if isAdmin() || (isTeacher() && request.resource.data.sectionId in mySections());
+      allow update, delete: if isAdmin() || (isTeacher() && resource.data.sectionId in mySections());
+    }
+
+    // ---- Homework submissions: a student may create/update ONLY their own
+    //      (while still 'Submitted', i.e. before a teacher has reviewed it);
+    //      teacher scoped to their sections (to review + leave feedback);
+    //      admin full access. --------------------------------------------------
+    match /submissions/{id} {
+      allow read: if isAdmin()
+        || (isTeacher() && resource.data.sectionId in mySections())
+        || (isStudent() && resource.data.studentId == myLinkedId());
+      allow create: if isAdmin()
+        || (isStudent() && request.resource.data.studentId == myLinkedId() && request.resource.data.status == 'Submitted');
+      allow update: if isAdmin()
+        || (isTeacher() && resource.data.sectionId in mySections())
+        || (isStudent() && resource.data.studentId == myLinkedId() && resource.data.status == 'Submitted');
+      allow delete: if isAdmin();
+    }
+
+    // ---- Behavior / Discipline log: teacher scoped to their sections;
+    //      a student/parent may only read their OWN records (more sensitive
+    //      than attendance, so no blanket student read) --------------------
+    match /behaviorLogs/{id} {
+      allow read: if isAdmin()
+        || (isTeacher() && resource.data.sectionId in mySections())
+        || (isStudent() && resource.data.studentId == myLinkedId());
+      allow create: if isAdmin() || (isTeacher() && request.resource.data.sectionId in mySections());
+      allow update, delete: if isAdmin() || (isTeacher() && resource.data.sectionId in mySections());
+    }
+
+    // ---- Library: catalog is admin-managed, everyone signed in can browse.
+    //      Loans: admin manages; a student/parent reads only their own. -----
+    match /books/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    match /loans/{id} {
+      allow read: if isAdmin() || (isStudent() && resource.data.studentId == myLinkedId());
+      allow write: if isAdmin();
+    }
+
+    // ---- School calendar events: not sensitive, everyone signed in reads;
+    //      only admin manages ------------------------------------------------
+    match /events/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // ---- Direct messages (teacher <-> parent inbox): private to the two
+    //      participants. Admin can read for safeguarding oversight, but the
+    //      app doesn't currently give admin a UI for it. A sender may only
+    //      create a message as themselves; either participant may update it
+    //      (used to mark as read); only admin can delete. --------------------
+    match /messages/{id} {
+      allow read: if isAdmin()
+        || (isSignedIn() && (resource.data.fromUserId == request.auth.uid || resource.data.toUserId == request.auth.uid));
+      allow create: if isSignedIn() && request.resource.data.fromUserId == request.auth.uid;
+      allow update: if isSignedIn() && (resource.data.fromUserId == request.auth.uid || resource.data.toUserId == request.auth.uid);
+      allow delete: if isAdmin();
+    }
+  }
+}

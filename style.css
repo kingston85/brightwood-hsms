@@ -1,0 +1,152 @@
+/* Brightwood HSMS — supplemental styles beyond Tailwind utility classes */
+
+.role-tab.active-role {
+  background-color: #4f46e5;
+  color: #fff;
+  border-color: #4f46e5;
+}
+
+#navList a {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  padding: .55rem .75rem;
+  border-radius: .6rem;
+  border-left: 3px solid transparent;
+  color: #cbd5e1;
+  cursor: pointer;
+  transition: background-color .15s ease, color .15s ease, border-color .15s ease;
+}
+#navList a:hover { background-color: rgba(255,255,255,.08); color: #fff; }
+#navList a.active {
+  background: linear-gradient(90deg, rgba(99,102,241,.28), rgba(99,102,241,.1));
+  color: #fff;
+  border-left-color: #818cf8;
+  font-weight: 600;
+}
+#navList .nav-icon { width: 1.1rem; text-align: center; opacity: .9; }
+#navList .nav-section-label {
+  font-size: .68rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: #64748b;
+  padding: .9rem .75rem .3rem;
+}
+
+table.data-table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+table.data-table thead th {
+  text-align: left;
+  font-size: .72rem;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: #64748b;
+  padding: .65rem .9rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+  white-space: nowrap;
+}
+table.data-table tbody td {
+  padding: .65rem .9rem;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+}
+table.data-table tbody tr:hover { background: #f8fafc; }
+table.data-table tbody tr:last-child td { border-bottom: none; }
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  padding: .15rem .55rem;
+  border-radius: 999px;
+  font-size: .72rem;
+  font-weight: 600;
+}
+.badge-green { background: #dcfce7; color: #166534; }
+.badge-emerald { background: #dcfce7; color: #166534; }
+.badge-red { background: #fee2e2; color: #991b1b; }
+.badge-amber { background: #fef3c7; color: #92400e; }
+.badge-slate { background: #f1f5f9; color: #475569; }
+.badge-blue { background: #dbeafe; color: #1e40af; }
+.badge-brand { background: #e0e7ff; color: #3730a3; }
+.badge-violet { background: #ede9fe; color: #5b21b6; }
+.badge-rose { background: #ffe4e6; color: #9f1239; }
+.badge-cyan { background: #cffafe; color: #155e75; }
+
+.card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 1rem;
+  box-shadow: 0 1px 2px rgba(15,23,42,.06), 0 1px 8px rgba(15,23,42,.04);
+  transition: box-shadow .2s ease, border-color .2s ease;
+}
+.card:hover { box-shadow: 0 4px 10px rgba(15,23,42,.08), 0 2px 24px rgba(79,70,229,.06); }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  font-weight: 600;
+  font-size: .85rem;
+  padding: .5rem .9rem;
+  border-radius: .6rem;
+  transition: background-color .15s ease, opacity .15s ease, transform .1s ease, box-shadow .15s ease;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-primary { background: #4f46e5; color: #fff; box-shadow: 0 1px 2px rgba(79,70,229,.25), 0 1px 8px rgba(79,70,229,.12); }
+.btn-primary:hover { background: #4338ca; }
+.btn-secondary { background: #f1f5f9; color: #1e293b; }
+.btn-secondary:hover { background: #e2e8f0; }
+.btn-danger { background: #fee2e2; color: #991b1b; }
+.btn-danger:hover { background: #fecaca; }
+.btn-sm { padding: .3rem .6rem; font-size: .78rem; }
+.btn:active:not(:disabled) { transform: scale(.97); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+
+.form-label { display:block; font-size:.72rem; font-weight:600; color:#475569; margin-bottom:.3rem; }
+.form-input, .form-select, .form-textarea {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: .6rem;
+  padding: .55rem .75rem;
+  font-size: .875rem;
+  background: #fff;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.form-input:focus, .form-select:focus, .form-textarea:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99,102,241,.15);
+}
+
+/* Empty-state placeholder — icon + message, used by list/table screens when
+   there's nothing to show yet. */
+.empty-state { padding: 2.5rem 1.5rem; text-align: center; color: #94a3b8; }
+.empty-state .empty-icon { font-size: 1.75rem; margin-bottom: .5rem; opacity: .7; }
+.empty-state .empty-title { font-size: .9rem; font-weight: 600; color: #64748b; }
+.empty-state .empty-hint { font-size: .78rem; margin-top: .2rem; }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 999px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+@media print {
+  #sidebar, header, #menuToggle, .no-print { display: none !important; }
+  #appShell, main#mainContent { margin: 0 !important; padding: 0 !important; }
+  body { background: #fff !important; }
+  .print-only { display: block !important; }
+}
+.print-only { display: none; }
+
+.stat-card { padding: 1.25rem; }
+.stat-card .stat-value { font-size: 1.6rem; font-weight: 800; letter-spacing: -.02em; }
+
+.tab-btn { padding:.5rem 1rem; font-size:.85rem; font-weight:600; border-radius:.6rem; color:#64748b; cursor:pointer; transition: background-color .15s ease, color .15s ease; }
+.tab-btn:hover { background: #f1f5f9; }
+.tab-btn.active { background:#eef2ff; color:#4f46e5; }
+
+/* Subtle fade-in retriggered on every navigate() so switching screens feels
+   less like an abrupt content swap. */
+@keyframes view-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.view-fade { animation: view-fade-in .18s ease; }
