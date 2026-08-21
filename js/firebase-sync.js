@@ -42,6 +42,7 @@ const FB = {
   currentProfile: null,
   unsubscribers: [],
   lastKnownRemote: {},
+  lastKnownRemoteMeta: null,
   _pushing: false,
   _pendingPush: null,
 
@@ -179,9 +180,13 @@ const FB = {
     this._stopListeners();
     DB.data = DB.data || {};
     this.lastKnownRemote = {};
+    this.lastKnownRemoteMeta = null;
 
     this.unsubscribers.push(this.db.collection('meta').doc('school').onSnapshot((doc) => {
-      if (doc.exists) DB.data.meta = { ...DB.data.meta, ...doc.data() };
+      if (doc.exists) {
+        this.lastKnownRemoteMeta = doc.data();
+        DB.data.meta = { ...DB.data.meta, ...this.lastKnownRemoteMeta };
+      }
       if (window.renderCurrentView) renderCurrentView();
     }));
 
@@ -189,8 +194,9 @@ const FB = {
       this.unsubscribers.push(this.db.collection(col).onSnapshot((qs) => {
         const map = {};
         DB.data[col] = qs.docs.map((d) => {
-          map[d.id] = true;
-          return { id: d.id, ...d.data() };
+          const docData = d.data();
+          map[d.id] = docData; // full remote data, not just a flag — pushAll() diffs against this
+          return { id: d.id, ...docData };
         });
         this.lastKnownRemote[col] = map;
         if (window.renderCurrentView) renderCurrentView();
@@ -211,12 +217,40 @@ const FB = {
     this.unsubscribers = [];
   },
 
+  // Plain-object/array deep-equality, key-order independent — used by
+  // pushAll() below to tell "actually changed" apart from "identical to
+  // what we last received from Firestore." Good enough for this app's data
+  // (JSON-shaped: strings, numbers, booleans, null, arrays, nested objects;
+  // no Firestore Timestamp/FieldValue values are ever stored on the
+  // per-record fields this compares).
+  _deepEqual(a, b) {
+    if (a === b) return true;
+    if (a === null || b === null || typeof a !== 'object' || typeof b !== 'object') return false;
+    if (Array.isArray(a) || Array.isArray(b)) {
+      if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+      return a.every((v, i) => this._deepEqual(v, b[i]));
+    }
+    const ak = Object.keys(a), bk = Object.keys(b);
+    if (ak.length !== bk.length) return false;
+    return ak.every((k) => Object.prototype.hasOwnProperty.call(b, k) && this._deepEqual(a[k], b[k]));
+  },
+
   // Full-collection write-through: called by DB.save() whenever local data
   // changes. Diffs the in-memory arrays against the last known Firestore
   // snapshot (kept up to date by the listeners above) so it can add/update
   // AND delete removed records in one batch. Simple and robust for a
   // school-sized dataset; the free Firestore tier's daily write quota is
   // far larger than what a school's worth of edits will ever use.
+  //
+  // Important: a record that hasn't actually changed since we last heard
+  // about it from Firestore is skipped entirely rather than re-written.
+  // This isn't just an efficiency tweak — several collections (payment
+  // submissions once approved, homework submissions once reviewed, etc.)
+  // have security rules that only let their *owner* update them while
+  // still in an early/unlocked status. Since one save() call batches every
+  // collection together, re-writing an untouched-but-now-locked record
+  // alongside a real edit would get the *entire* batch rejected — breaking
+  // saves for that user from then on, not just that one record.
   async pushAll(data) {
     if (!this.active || !this.db) return;
     if (this._pushing) { this._pendingPush = data; return; }
@@ -224,23 +258,44 @@ const FB = {
     this._setStatus('busy', 'Firebase: saving…');
     try {
       const batch = this.db.batch();
-      const { id, ...metaRest } = data.meta || {};
-      batch.set(this.db.collection('meta').doc('school'), metaRest, { merge: true });
+      let writeCount = 0;
+
+      // meta/school is admin-only to write (see firestore.rules) — including
+      // it in every save() batch regardless of who's saving would get a
+      // teacher's or student's *entire* save (e.g. sending a message,
+      // submitting homework) rejected, since a batch either fully commits
+      // or fully fails. Only an admin ever attempts this write, and only
+      // when it actually changed.
+      if (this.currentProfile && this.currentProfile.role === 'admin') {
+        const { id, ...metaRest } = data.meta || {};
+        if (!this._deepEqual(this.lastKnownRemoteMeta || {}, metaRest)) {
+          batch.set(this.db.collection('meta').doc('school'), metaRest, { merge: true });
+          writeCount++;
+        }
+      }
 
       FB_COLLECTIONS.forEach((col) => {
+        const remoteMap = this.lastKnownRemote[col] || {};
         const localIds = new Set((data[col] || []).map((x) => x.id));
-        const remoteIds = new Set(Object.keys(this.lastKnownRemote[col] || {}));
+        const remoteIds = new Set(Object.keys(remoteMap));
         (data[col] || []).forEach((item) => {
           const { id, ...rest } = item;
+          const remote = remoteMap[id];
+          if (remote !== undefined && this._deepEqual(remote, rest)) return; // unchanged — skip
           batch.set(this.db.collection(col).doc(item.id), rest);
+          writeCount++;
         });
         remoteIds.forEach((rid) => {
-          if (!localIds.has(rid)) batch.delete(this.db.collection(col).doc(rid));
+          if (!localIds.has(rid)) { batch.delete(this.db.collection(col).doc(rid)); writeCount++; }
         });
       });
 
-      await batch.commit();
-      this._setStatus('live', 'Firebase: saved ' + new Date().toLocaleTimeString());
+      if (writeCount > 0) {
+        await batch.commit();
+        this._setStatus('live', 'Firebase: saved ' + new Date().toLocaleTimeString());
+      } else {
+        this._setStatus('live', 'Firebase: live sync');
+      }
     } catch (e) {
       console.error('Firebase pushAll failed:', e);
       this._setStatus('error', 'Firebase: save failed (see console)');
