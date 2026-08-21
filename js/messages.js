@@ -6,7 +6,11 @@
    thread, identified by their two user IDs sorted together.
    ========================================================================== */
 
-const MessagesUI = { activePartnerId: null };
+// mobilePane: 'list' | 'chat' — below the md breakpoint the two-pane layout
+// can't fit side by side, so only one pane shows at a time (like a phone
+// messaging app): the thread list until a thread is tapped, then the chat
+// with a "Back" button. At md+ both panes always show regardless of this.
+const MessagesUI = { activePartnerId: null, mobilePane: 'list' };
 
 function messageThreadId(uidA, uidB) {
   return [uidA, uidB].sort().join('__');
@@ -17,17 +21,26 @@ function messageThreadId(uidA, uidB) {
 // school) — a teacher can message parents of students in their assigned
 // sections; a parent can message any teacher connected to their child's
 // section (class teacher or a subject teacher on the timetable).
+//
+// Deliberately does NOT read DB.data.users to find the other person's
+// account: firestore.rules only lets a signed-in user read their OWN
+// users/{uid} profile (see firestore.rules), so under real Firebase
+// security a teacher's or student's local copy of `users` only ever
+// contains their own single record — looking up someone else's account
+// there would silently find nobody. Instead this uses `parentUserId` /
+// `userId`, denormalized onto the student/teacher record itself by
+// FB.adminCreateAccount() when the account was created, since students and
+// teachers are readable more broadly (by section, or by anyone signed in).
+// In local-storage demo mode (no Firebase) this still works the same way —
+// data.js's seed data sets the same fields — so the two modes behave
+// identically instead of messaging only working in the untested one.
 function eligibleMessagePartners() {
   const me = Auth.currentUser;
   const out = [];
   if (me.role === 'teacher') {
     const secIds = Auth.teacherSections(me.linkedId);
-    const seen = new Set();
-    DB.data.students.filter(s => secIds.includes(s.sectionId)).forEach((stu) => {
-      const parentUser = DB.data.users.find(u => u.role === 'student' && u.linkedId === stu.id);
-      if (!parentUser || seen.has(parentUser.id)) return;
-      seen.add(parentUser.id);
-      out.push({ userId: parentUser.id, name: parentUser.name, studentId: stu.id, studentName: `${stu.firstName} ${stu.lastName}` });
+    DB.data.students.filter(s => secIds.includes(s.sectionId) && s.parentUserId).forEach((stu) => {
+      out.push({ userId: stu.parentUserId, name: stu.guardianName || `${stu.firstName} ${stu.lastName}'s guardian`, studentId: stu.id, studentName: `${stu.firstName} ${stu.lastName}` });
     });
   } else if (me.role === 'student') {
     const stu = Auth.linkedRecord();
@@ -36,9 +49,9 @@ function eligibleMessagePartners() {
     DB.allSections().filter(s => s.sectionId === stu.sectionId && s.classTeacherId).forEach(s => teacherIds.add(s.classTeacherId));
     DB.data.timetable.filter(t => t.sectionId === stu.sectionId).forEach(t => teacherIds.add(t.teacherId));
     teacherIds.forEach((tid) => {
-      const teacherUser = DB.data.users.find(u => u.role === 'teacher' && u.linkedId === tid);
-      if (!teacherUser) return;
-      out.push({ userId: teacherUser.id, name: teacherUser.name, studentId: stu.id, studentName: `${stu.firstName} ${stu.lastName}` });
+      const teacher = DB.find('teachers', tid);
+      if (!teacher || !teacher.userId) return;
+      out.push({ userId: teacher.userId, name: `${teacher.firstName} ${teacher.lastName}`, studentId: stu.id, studentName: `${stu.firstName} ${stu.lastName}` });
     });
   }
   return out;
@@ -114,15 +127,17 @@ function renderMessages() {
   document.getElementById('mainContent').innerHTML = `
     <div class="card overflow-hidden" style="height: calc(100vh - 11rem);">
       <div class="grid md:grid-cols-[280px_1fr] h-full">
-        <div class="border-b md:border-b-0 md:border-r border-slate-200 overflow-y-auto p-2 space-y-1">${listHTML}</div>
-        <div class="flex flex-col min-h-0">${convHTML}</div>
+        <div class="${MessagesUI.mobilePane === 'chat' ? 'hidden md:block' : 'block'} border-b md:border-b-0 md:border-r border-slate-200 overflow-y-auto p-2 space-y-1">${listHTML}</div>
+        <div class="${MessagesUI.mobilePane === 'list' ? 'hidden md:flex' : 'flex'} flex-col min-h-0">${convHTML}</div>
       </div>
     </div>
   `;
 
   document.querySelectorAll('.messageThreadBtn').forEach((btn) => {
-    btn.onclick = () => { MessagesUI.activePartnerId = btn.dataset.partner; markThreadRead(btn.dataset.partner); renderMessages(); };
+    btn.onclick = () => { MessagesUI.activePartnerId = btn.dataset.partner; MessagesUI.mobilePane = 'chat'; markThreadRead(btn.dataset.partner); renderMessages(); };
   });
+  const backBtn = document.getElementById('msgBackBtn');
+  if (backBtn) backBtn.onclick = () => { MessagesUI.mobilePane = 'list'; renderMessages(); };
   if (activeThread) {
     markThreadRead(activeThread.userId);
     wireThreadPane(activeThread.userId);
@@ -143,6 +158,9 @@ function renderThreadPane(thread) {
 
   return `
     <div class="px-4 py-3 border-b border-slate-200 flex items-center gap-3 shrink-0">
+      <button type="button" id="msgBackBtn" class="md:hidden -ml-1 p-1.5 rounded-lg hover:bg-slate-100 shrink-0" aria-label="Back to conversations">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
       <div class="w-9 h-9 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xs font-bold">${initialsAvatar(thread.name)}</div>
       <div>
         <div class="font-semibold text-sm">${esc(thread.name)}</div>
@@ -183,6 +201,29 @@ function sendMessageTo(partnerId, body) {
     body, sentAt: new Date().toISOString(), readBy: [me.id],
   });
   renderMessages();
+  notifyNewMessage(me, partner, body);
+}
+
+// Best-effort email nudge so a message doesn't just sit unseen until
+// someone happens to open the app. Looks the recipient's email up from the
+// student/teacher record rather than the users collection — see the note
+// on eligibleMessagePartners() for why. Quietly does nothing if Firebase
+// Sync is off or no email is on file (e.g. guardianEmail was never filled
+// in) — this is a bonus, never something the core messaging flow depends on.
+function notifyNewMessage(me, partner, body) {
+  if (typeof FB === 'undefined' || !FB.active || !partner) return;
+  let toEmail = '';
+  if (me.role === 'teacher') {
+    const stu = DB.find('students', partner.studentId);
+    toEmail = stu && stu.guardianEmail;
+  } else if (me.role === 'student') {
+    const teacher = DB.data.teachers.find(t => t.userId === partner.userId);
+    toEmail = teacher && teacher.email;
+  }
+  if (!toEmail) return;
+  const preview = body.length > 200 ? body.slice(0, 200) + '…' : body;
+  FB.queueEmail(toEmail, `New message from ${me.name} — Brightwood HSMS`,
+    `${me.name} sent you a message${partner.studentName ? ` regarding ${partner.studentName}` : ''}:\n\n"${preview}"\n\nSign in to Brightwood HSMS to reply.`);
 }
 
 function markThreadRead(partnerId) {
