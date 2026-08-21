@@ -420,12 +420,25 @@ function renderPayMethodDetails(m) {
       <p class="text-xs text-slate-400 mt-2">Transfer the amount from your own bank, then fill in the form below with the transaction reference.</p>
     `;
   } else {
+    // The USSD code that opens each operator's own money-transfer menu in
+    // Liberia. Neither operator supports a one-shot dial string with the
+    // recipient/amount baked in (transfers are an interactive menu you step
+    // through on the phone) — so this button just saves the payer from
+    // typing the code themselves; they still pick "Send Money", enter the
+    // number/amount, and confirm with their own PIN on their own phone.
+    const ussd = m.key === 'Orange Money' ? '*144#' : m.key === 'MTN Mobile Money' ? '*156#' : '';
     wrap.innerHTML = `
       <dl class="text-sm space-y-1 bg-slate-50 border border-slate-200 rounded-lg p-3">
         <div class="flex justify-between"><dt class="text-slate-500">Send to</dt><dd class="font-semibold">${esc(m.number)}</dd></div>
         <div class="flex justify-between"><dt class="text-slate-500">Account Name</dt><dd class="font-semibold">${esc(m.name) || '—'}</dd></div>
       </dl>
-      <p class="text-xs text-slate-400 mt-2">Send the amount using ${esc(m.key)} on your phone, then fill in the form below with the confirmation reference from the SMS you receive.</p>
+      ${ussd ? `
+      <a href="tel:${encodeURIComponent(ussd)}" class="btn btn-secondary w-full justify-center mt-2 gap-2">
+        📞 Open ${esc(ussd)} on this phone
+      </a>
+      <p class="text-xs text-slate-400 mt-1">On a phone, this opens your dialer with ${esc(ussd)} ready to call — from there choose <strong>Send Money</strong>, enter <strong>${esc(m.number)}</strong> and the amount, and confirm with your PIN. (Doesn't work from a computer — dial ${esc(ussd)} manually on the phone the SIM is in instead.)</p>
+      ` : ''}
+      <p class="text-xs text-slate-400 mt-2">Once sent, come back here and fill in the form below with the confirmation reference from the SMS you receive.</p>
     `;
   }
 }
