@@ -4,7 +4,15 @@
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch((err) => console.warn('Service worker registration failed:', err));
+    navigator.serviceWorker.register('sw.js')
+      // Proactively check for a changed sw.js on every load, rather than
+      // waiting on the browser's own much-less-frequent update schedule
+      // (which can otherwise leave someone on an old service worker script
+      // for a surprisingly long time). sw.js's own fetch handler already
+      // always serves fresh app files while online regardless — this just
+      // makes sure the service worker script itself doesn't lag behind too.
+      .then((reg) => reg.update())
+      .catch((err) => console.warn('Service worker registration failed:', err));
   });
 }
 
