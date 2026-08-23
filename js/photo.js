@@ -1,19 +1,22 @@
 /* ==========================================================================
    Brightwood HSMS — Profile photos (students & teachers)
-   Uses Firebase Storage when Firebase Sync is active — see README.md
-   "Profile Photos" for the one-time setup (enable Storage in the console,
-   deploy storage.rules). In local-storage demo mode there's no cloud
-   storage to upload to, so the compressed photo is embedded directly on
-   the record instead — the same trick already used for the school logo in
-   Settings. Either way every display site only ever deals with a
-   `photoURL` field on the student/teacher record (a real https:// download
-   URL, or a data: URI in local mode) via avatarHTML() below, so nothing
-   else in the app needs to know or care which mode produced it.
+   The compressed photo is embedded directly on the student/teacher record
+   as a data: URI — the same trick already used for the school logo in
+   Settings. No Firebase Storage needed (that requires the paid Blaze plan
+   as of late 2024), so this works identically whether Firebase Sync is on
+   or the app is running in pure local-storage demo mode: the record just
+   syncs through Firestore like any other field. Every display site only
+   ever deals with a `photoURL` field via avatarHTML() below.
    ========================================================================== */
 
 const PHOTO_MAX_DIM = 480;
 const PHOTO_JPEG_QUALITY = 0.82;
-const PHOTO_MAX_BYTES = 2 * 1024 * 1024; // storage.rules enforces this too — this is just an earlier, friendlier check
+// Firestore documents are capped at 1MiB total, and base64 adds ~33%
+// overhead on top of the raw JPEG bytes — so this cap has to leave real
+// headroom under that limit (not just under the file's own reasonableness).
+// PHOTO_MAX_DIM/PHOTO_JPEG_QUALITY above normally produce a file well under
+// this anyway; it's a safety ceiling for unusually busy/noisy source images.
+const PHOTO_MAX_BYTES = 400 * 1024;
 
 // Renders a photo <img> when one exists, else the same initials-circle this
 // replaces — same sizeClass/colorClass convention as the old
@@ -70,35 +73,17 @@ function blobToDataURL(blob) {
   });
 }
 
-// kind is 'students' or 'teachers' — matches both the DB collection name
-// and the Storage folder name (see storage.rules), so every call site below
-// stays a one-liner regardless of which record type it's for.
+// kind is 'students' or 'teachers' — matches the DB collection name, so
+// every call site below stays a one-liner regardless of which record type
+// it's for.
 async function uploadProfilePhoto(kind, id, file) {
   const blob = await compressPhotoFile(file);
-  if (typeof FB !== 'undefined' && FB.active) {
-    if (typeof firebase === 'undefined' || !firebase.storage) {
-      throw new Error('Firebase Storage isn’t set up for this project yet — see README.md "Profile Photos".');
-    }
-    const ref = firebase.storage().ref(`profilePhotos/${kind}/${id}`);
-    await ref.put(blob, { contentType: 'image/jpeg' });
-    const url = await ref.getDownloadURL();
-    DB.update(kind, id, { photoURL: url });
-    return url;
-  }
-  // Local-storage demo mode — no cloud storage available, embed directly.
   const dataUrl = await blobToDataURL(blob);
   DB.update(kind, id, { photoURL: dataUrl });
   return dataUrl;
 }
 
 async function removeProfilePhoto(kind, id) {
-  if (typeof FB !== 'undefined' && FB.active && typeof firebase !== 'undefined' && firebase.storage) {
-    try {
-      await firebase.storage().ref(`profilePhotos/${kind}/${id}`).delete();
-    } catch (e) {
-      if (!e || e.code !== 'storage/object-not-found') console.warn('Photo delete failed:', e);
-    }
-  }
   DB.update(kind, id, { photoURL: '' });
 }
 
