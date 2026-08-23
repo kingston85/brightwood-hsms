@@ -37,7 +37,7 @@ function renderBehavior() {
 
   const rows = list.map(b => `
     <tr>
-      <td>${DB.studentName(b.studentId)}</td>
+      <td>${studentLinkHTML(b.studentId)}</td>
       <td>${badge(b.type, BEHAVIOR_TYPES[b.type]?.color || 'slate')}</td>
       <td class="${b.points >= 0 ? 'text-emerald-600' : 'text-red-600'} font-semibold">${b.points > 0 ? '+' : ''}${b.points}</td>
       <td>${esc(b.description)}</td>
