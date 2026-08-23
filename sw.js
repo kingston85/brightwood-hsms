@@ -25,7 +25,7 @@
    unused — it's no longer what makes an update actually show up.
    ========================================================================== */
 
-const CACHE_VERSION = 'hsms-v3';
+const CACHE_VERSION = 'hsms-v4';
 
 const PRECACHE_URLS = [
   '.',
