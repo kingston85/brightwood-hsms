@@ -64,7 +64,10 @@ function catalogHTML() {
   return `
     <div class="flex flex-wrap items-center gap-3 justify-between">
       <input id="libSearch" value="${esc(LibraryUI.search)}" placeholder="Search title, author, category…" class="form-input !w-64"/>
-      ${isAdmin ? `<button class="btn btn-primary no-print" onclick="openBookForm()">+ Add Book</button>` : ''}
+      ${isAdmin ? `<div class="flex gap-2 no-print">
+        <button class="btn btn-secondary" onclick="printBookLabels()">🏷️ Print Book Labels</button>
+        <button class="btn btn-primary" onclick="openBookForm()">+ Add Book</button>
+      </div>` : ''}
     </div>
     <div class="card overflow-x-auto">
       <table class="data-table"><thead><tr><th>Title</th><th>Author</th><th>Category</th><th>Available</th>${isAdmin ? '<th class="no-print"></th>' : ''}</tr></thead><tbody>${rows}</tbody></table>
@@ -86,7 +89,10 @@ function loansHTML() {
   `).join('') || `<tr><td colspan="6" class="text-center text-slate-400 py-10">No loans recorded yet.</td></tr>`;
 
   return `
-    <div class="flex justify-end no-print"><button class="btn btn-primary" onclick="openCheckoutForm()">+ Check Out Book</button></div>
+    <div class="flex justify-end gap-2 no-print">
+      <button class="btn btn-secondary" onclick="goToQrScan('library')">📷 Scan to Check Out/Return</button>
+      <button class="btn btn-primary" onclick="openCheckoutForm()">+ Check Out Book</button>
+    </div>
     <div class="card overflow-x-auto">
       <table class="data-table"><thead><tr><th>Book</th><th>Student</th><th>Checked Out</th><th>Due</th><th>Status</th><th class="no-print"></th></tr></thead><tbody>${rows}</tbody></table>
     </div>
@@ -173,6 +179,31 @@ function openCheckoutForm() {
 function returnBook(id) {
   DB.update('loans', id, { returnDate: todayISO() });
   toast('Book marked as returned.'); renderLibraryTabBody();
+}
+
+/* ------------------------------ Book Labels (admin) ------------------------------ */
+// Printable QR labels — one per title in the catalog (not per physical
+// copy, since this app doesn't track individual copies). Stick one inside
+// the front cover of each copy; scanning it in the Library tab of the QR
+// Scanner looks the title up and offers check-out/return on the spot.
+function printBookLabels() {
+  const list = DB.data.books.slice().sort((a, b) => a.title.localeCompare(b.title));
+  const labels = list.map(b => `
+    <div class="card p-3 flex flex-col items-center text-center border border-slate-200" style="width:160px;">
+      <div class="qr-slot" data-qr="${esc(qrBookPayload(b.id))}" data-qr-width="110"></div>
+      <div class="text-xs font-semibold mt-1 leading-snug">${esc(b.title)}</div>
+      <div class="text-[10px] text-slate-400">${esc(b.isbn || b.author || '')}</div>
+    </div>
+  `).join('') || `<p class="text-slate-400">No books in the catalog yet.</p>`;
+
+  document.getElementById('mainContent').innerHTML = `
+    <div class="no-print flex gap-2 mb-2">
+      <button class="btn btn-secondary" onclick="renderLibrary()">&larr; Back to Library</button>
+      <button class="btn btn-primary" onclick="window.print()">🖨️ Print ${list.length} Label(s)</button>
+    </div>
+    <div class="flex flex-wrap gap-3">${labels}</div>
+  `;
+  renderAllQrSlots();
 }
 
 function addDaysISOLib(iso, days) {
