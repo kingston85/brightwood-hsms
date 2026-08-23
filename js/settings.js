@@ -27,7 +27,7 @@ function renderSettings() {
 
       <div class="card p-5">
         <h3 class="font-bold mb-3">School Branding</h3>
-        <p class="text-sm text-slate-500 mb-4">Shown in the sidebar once signed in, and on printed report cards &amp; ID cards. The pre-sign-in login screen keeps the default Brightwood mark.</p>
+        <p class="text-sm text-slate-500 mb-4">Shown in the sidebar once signed in, and on printed report cards &amp; ID cards.</p>
         <div class="flex items-center gap-4 mb-4">
           <div class="w-16 h-16 rounded-lg border border-slate-200 flex items-center justify-center overflow-hidden bg-slate-50 shrink-0">
             ${meta.schoolLogo ? `<img src="${meta.schoolLogo}" class="w-full h-full object-cover" alt="Current logo"/>` : '<span class="text-xs text-slate-400">No logo</span>'}
@@ -40,10 +40,26 @@ function renderSettings() {
             ${meta.schoolLogo ? `<button class="btn btn-danger btn-sm" onclick="removeSchoolLogo()">Remove</button>` : ''}
           </div>
         </div>
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-3 mb-4">
           <label class="form-label !mb-0">Accent Color</label>
           <input id="brandColorInput" type="color" value="${meta.brandColor || '#4f46e5'}" class="w-10 h-9 rounded border border-slate-300 cursor-pointer"/>
           <button class="btn btn-secondary btn-sm" onclick="resetBrandColor()">Reset to Default</button>
+        </div>
+        <div class="pt-4 border-t border-slate-100">
+          <label class="form-label">Login Page Background Photo</label>
+          <p class="text-xs text-slate-400 mb-3">A photo of your school, shown as a faint watermark behind the sign-in screen — before anyone signs in.</p>
+          <div class="flex items-center gap-4">
+            <div class="w-24 h-16 rounded-lg border border-slate-200 flex items-center justify-center overflow-hidden bg-slate-50 shrink-0">
+              ${meta.loginBgPhoto ? `<img src="${meta.loginBgPhoto}" class="w-full h-full object-cover" alt="Current login background"/>` : '<span class="text-xs text-slate-400">No photo</span>'}
+            </div>
+            <div class="space-y-2">
+              <label class="btn btn-secondary btn-sm cursor-pointer">
+                Upload Photo
+                <input id="loginBgFileInput" type="file" accept="image/*" class="hidden"/>
+              </label>
+              ${meta.loginBgPhoto ? `<button class="btn btn-danger btn-sm" onclick="removeLoginBgPhoto()">Remove</button>` : ''}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -173,6 +189,21 @@ function renderSettings() {
     applyBranding();
     toast('Accent color updated.');
   };
+
+  document.getElementById('loginBgFileInput').onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const dataUrl = await compressLoginBgFile(file);
+      DB.data.meta.loginBgPhoto = dataUrl;
+      DB.save();
+      applyLoginBackground();
+      toast('Login background photo updated.');
+      renderSettings();
+    } catch (err) {
+      toast(err.message || 'Could not use that image.');
+    }
+  };
 }
 
 function removeSchoolLogo() {
@@ -180,6 +211,14 @@ function removeSchoolLogo() {
   DB.save();
   applyBranding();
   toast('Logo removed.');
+  renderSettings();
+}
+
+function removeLoginBgPhoto() {
+  DB.data.meta.loginBgPhoto = '';
+  DB.save();
+  applyLoginBackground();
+  toast('Login background photo removed.');
   renderSettings();
 }
 
@@ -219,6 +258,47 @@ function compressLogoFile(file) {
         const dataUrl = canvas.toDataURL('image/png');
         if (dataUrl.length > 500000) {
           reject(new Error('That logo is still too large even after resizing. Try a simpler image (a flat-color logo compresses much better than a photo).'));
+          return;
+        }
+        resolve(dataUrl);
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// The login background watermark is a real photo (not a flat-color logo), so
+// JPEG compresses it far better than the PNG path above. Shown at low
+// opacity behind the login screen, so it doesn't need to be sharp — kept
+// deliberately small since it shares the same meta/school Firestore
+// document (and its 1MiB cap) as the logo above and everything else in
+// School Information/Payment Settings.
+function compressLoginBgFile(file) {
+  return new Promise((resolve, reject) => {
+    if (!file.type || !file.type.startsWith('image/')) { reject(new Error('Please choose an image file (PNG, JPG, etc).')); return; }
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Could not read that file.'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Could not read that image.'));
+      img.onload = () => {
+        const maxDim = 1280;
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          const scale = maxDim / Math.max(width, height);
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+        if (dataUrl.length > 280000) {
+          reject(new Error('That photo is still too large even after resizing. Try a different one, or crop it down first.'));
           return;
         }
         resolve(dataUrl);
