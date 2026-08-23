@@ -56,10 +56,11 @@ function structureHTML() {
           <div class="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
             <div>
               <span class="font-semibold">Section ${esc(s.name)}</span>
-              <span class="text-xs text-slate-400 ml-2">${DB.studentsInSection(s.id).length} students</span>
+              <a href="#" class="text-xs text-brand-600 hover:underline ml-2" onclick="event.preventDefault(); goToSectionStudents('${c.id}','${s.id}')">${DB.studentsInSection(s.id).length} students</a>
               <div class="text-xs text-slate-500">Class Teacher: ${s.classTeacherId ? DB.teacherName(s.classTeacherId) : '<span class="text-amber-600">Unassigned</span>'}</div>
             </div>
             <div class="space-x-1">
+              <button class="btn btn-secondary btn-sm" onclick="goToSectionAttendance('${s.id}')">📝 Attendance</button>
               <button class="btn btn-secondary btn-sm" onclick="editSection('${c.id}','${s.id}')">Edit</button>
               <button class="btn btn-secondary btn-sm" onclick="openPromoteForm('${c.id}','${s.id}')">Promote</button>
               <button class="btn btn-danger btn-sm" onclick="deleteSection('${c.id}','${s.id}')">Remove</button>
