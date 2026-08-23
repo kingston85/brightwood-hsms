@@ -29,7 +29,7 @@ function renderAlumni() {
     <tr>
       <td>
         <div class="flex items-center gap-3">
-          <div class="w-9 h-9 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xs font-bold">${initialsAvatar(s.firstName + ' ' + s.lastName)}</div>
+          ${avatarHTML(s.photoURL, s.firstName + ' ' + s.lastName, 'w-9 h-9', 'bg-brand-100 text-brand-700 text-xs')}
           <div>
             <div class="font-semibold text-ink-900">${esc(s.firstName)} ${esc(s.lastName)}</div>
             <div class="text-xs text-slate-400">${esc(s.admissionNo)}</div>
