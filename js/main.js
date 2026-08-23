@@ -105,13 +105,30 @@ function friendlyFirebaseError(err) {
   return err && err.message ? err.message : 'Something went wrong — please try again.';
 }
 
+// Shows the signed-in person's real photo in the top-right header avatar
+// when they have one (students/teachers only — see js/photo.js), else the
+// initials it always showed before. Called on login, and again from the
+// student/teacher dashboards' "Change Photo" flow so a freshly-uploaded
+// photo shows up there immediately too, not just after the next sign-in.
+function refreshHeaderAvatar() {
+  const u = Auth.currentUser;
+  const el = document.getElementById('userAvatar');
+  if (!u || !el) return;
+  const linked = (typeof Auth.linkedRecord === 'function') ? Auth.linkedRecord() : null;
+  if (linked && linked.photoURL) {
+    el.innerHTML = `<img src="${esc(linked.photoURL)}" alt="${esc(u.name)}" class="w-full h-full rounded-full object-cover"/>`;
+  } else {
+    el.textContent = initialsAvatar(u.name);
+  }
+}
+
 function enterApp() {
   document.getElementById('loginScreen').classList.add('hidden');
   document.getElementById('appShell').classList.remove('hidden');
   document.getElementById('loginForm')?.reset();
 
   const u = Auth.currentUser;
-  document.getElementById('userAvatar').textContent = initialsAvatar(u.name);
+  refreshHeaderAvatar();
   document.getElementById('userName').textContent = u.name;
   document.getElementById('userRole').textContent = u.role === 'student' ? 'Student / Parent' : u.role;
   document.getElementById('todayLabel').textContent = new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
