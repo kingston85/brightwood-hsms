@@ -99,6 +99,18 @@ function allThreads() {
   return threads;
 }
 
+// Jump straight to a specific student's thread — used by the student
+// profile modal's "💬 Message" quick link (teachers only; see viewStudent()
+// in js/students.js). If there's no thread yet (nothing sent either way),
+// this still lands on Messages with that guardian available to message —
+// eligibleMessagePartners() includes every parent of a student in the
+// teacher's sections whether or not a conversation has started.
+function openMessageThreadForStudent(studentId) {
+  const t = allThreads().find(t => t.studentId === studentId);
+  if (t) { MessagesUI.activePartnerId = t.userId; MessagesUI.mobilePane = 'chat'; }
+  navigate('messages');
+}
+
 function renderMessages() {
   const threads = allThreads();
   // Fall back to the first thread if nothing is selected yet, OR if what's
@@ -164,7 +176,7 @@ function renderThreadPane(thread) {
       <div class="w-9 h-9 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xs font-bold">${initialsAvatar(thread.name)}</div>
       <div class="flex-1 min-w-0">
         <div class="font-semibold text-sm">${esc(thread.name)}</div>
-        ${thread.studentName ? `<div class="text-xs text-slate-400">Regarding ${esc(thread.studentName)}</div>` : ''}
+        ${thread.studentName ? `<div class="text-xs text-slate-400">Regarding ${Auth.is('teacher') && thread.studentId ? studentLinkHTML(thread.studentId, thread.studentName) : esc(thread.studentName)}</div>` : ''}
       </div>
       ${Auth.is('teacher') && thread.studentId ? whatsappBtnHTML(DB.find('students', thread.studentId)?.guardianPhone, `Hello, this is ${Auth.currentUser.name} from ${DB.data.meta.schoolName} regarding ${thread.studentName}.`) : ''}
     </div>
