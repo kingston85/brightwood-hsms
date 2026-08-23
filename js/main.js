@@ -4,6 +4,8 @@
 
 document.addEventListener('DOMContentLoaded', () => {
   DB.load();
+  I18N.init();
+  wireThemeToggle();
   wireLoginScreen();
   wireFirebaseLoginForm();
   initGoogleSignIn();
@@ -117,11 +119,13 @@ function enterApp() {
   currentRoute = ROUTES.find(r => r.roles.includes(u.role)) ? 'dashboard' : ROUTES[0].id;
   renderNav();
   navigate('dashboard');
+  applyBranding();
 
   // Give Drive.init()'s own async token/file setup a moment to settle before
   // checking — backups are admin-only, Drive.checkBackupReminder() no-ops
   // for everyone else.
   setTimeout(() => { if (typeof Drive !== 'undefined') Drive.checkBackupReminder(); }, 1500);
+  setTimeout(() => { if (typeof checkOverdueRemindersOnLogin === 'function') checkOverdueRemindersOnLogin(); }, 2500);
 }
 
 function wireShell() {
