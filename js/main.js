@@ -5,6 +5,7 @@
 document.addEventListener('DOMContentLoaded', () => {
   DB.load();
   I18N.init();
+  applyLoginBackground();
   wireThemeToggle();
   wireFirebaseLoginForm();
   initGoogleSignIn();
@@ -124,6 +125,7 @@ function wireShell() {
     document.getElementById('appShell').classList.add('hidden');
     document.getElementById('loginScreen').classList.remove('hidden');
     document.getElementById('firebaseForm')?.reset();
+    applyLoginBackground(); // Auth.logout() may have reloaded DB.data from local cache
     if (typeof Drive !== 'undefined') Drive.hideBackupReminder();
   });
 
