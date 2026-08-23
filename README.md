@@ -5,7 +5,7 @@ classes & timetables, attendance, gradebook & report cards, finance/fees,
 role-based logins (Admin / Teacher / Student-Parent), and an optional live,
 shared Firebase backend (or Google Drive backup) so everyone sees the same
 data. Runs entirely in the browser — no server to install unless you opt
-into Firebase.
+into Firebase. Works comfortably on a phone or tablet as well as a desktop.
 
 ## Quick Start
 
@@ -68,6 +68,18 @@ to Sample Data**, or just edit/delete the sample records as you go.
 - **Backup & Sync** (Admin) — download/restore a full JSON backup with no
   setup required, connect Google Drive for automatic cloud backup, or turn
   on Firebase Sync so every account shares one live database (see below).
+  A backup reminder tracks when data was last actually backed up anywhere
+  and, on admin login, either quietly backs up to Drive if it's already
+  connected and overdue, or shows a dismissible banner with one-click
+  backup options if it isn't.
+- **Firebase self-diagnostics** (Admin, when Firebase Sync is set up) — a
+  one-click check under Settings walks through config, sign-in, role,
+  per-collection read access and a live write/delete round-trip, and
+  explains any problem in plain English instead of "see console."
+- **Email Notifications** (optional, requires Firebase Sync) — parents/
+  guardians can automatically get an email when a teacher sends them a
+  message, marks their child's homework reviewed, or a submitted payment
+  is confirmed or rejected (see "Email Notifications" below).
 - **Announcements / Notice Board** — post school-wide, teachers-only,
   students-only, or a specific-section notice; pin important ones to the
   top. Everyone sees what's relevant to their role/section, and the latest
@@ -108,9 +120,19 @@ to Sample Data**, or just edit/delete the sample records as you go.
   downloadable template is provided), with a validation preview that flags
   any row referencing a class/section that doesn't exist before you commit.
 - **ID Cards & Printable Reports** — generate a printable grid of student ID
-  cards (photo-style initials avatar, name, class/section, admission no.)
-  for the current filtered list, or print a clean class-list report; both
-  reuse the same print-friendly styling as report cards and timetables.
+  cards (photo-style initials avatar, name, class/section, admission no.,
+  and a scannable QR code) for the current filtered list, or print a clean
+  class-list report; both reuse the same print-friendly styling as report
+  cards and timetables.
+- **QR Codes for Attendance & Library** — every student ID card and library
+  book label carries a QR code; the **QR Scanner** page (camera-based, with
+  a manual-lookup and USB-scanner-gun fallback for devices without a
+  webcam) scans a student's card to mark them present in one tap, or a book
+  label to check it in/out — see "QR Codes" below.
+- **Language (English/French scaffold)** — a switcher on the login screen
+  and sidebar translates the app's always-on-screen chrome (nav, login,
+  page titles); a starting point for full translation, not complete
+  coverage — see "Language" below.
 - **Online Fee Payment** — students/parents can pay an invoice two ways:
   **Mobile Money (Orange Money / MTN MoMo) or Bank Transfer**, where they
   submit a reference number after sending the money and an admin verifies
@@ -242,6 +264,41 @@ app still works exactly as before — the `mail` documents just accumulate
 unsent in Firestore, harmless but doing nothing, until you either install
 the Extension or periodically clear that collection out yourself.
 
+### Push Notifications (optional, requires Firebase Setup + a deployed Cloud Function)
+
+A step up from email: a real browser/OS notification, even when nobody has
+the app open in a tab. It rides the same events as Email Notifications
+(new message, homework reviewed, payment confirmed/rejected, fee overdue) —
+no extra trigger points to configure — but needs its own one-time setup
+since (unlike email) there's no ready-made Extension for it:
+
+1. In the [Firebase Console](https://console.firebase.google.com/), go to
+   **Project settings → Cloud Messaging → Web Push certificates** and
+   generate a key pair. Copy the key.
+2. Open `js/push.js` and paste it in as `VAPID_KEY`.
+3. Deploy the Cloud Functions in this project (the same step Card/Google
+   Pay payments use — see "Card & Google Pay Setup" below):
+   ```
+   cd functions && npm install && firebase deploy --only functions
+   ```
+   This adds one more function, `sendPushOnMail`, alongside the Stripe one
+   — if you've already deployed for Stripe, just redeploy.
+4. Publish the updated `firestore.rules` (adds a `/pushTokens/{uid}` rule).
+5. Reload the app. Each person who wants push notifications on a given
+   device signs in and clicks **Settings → Push Notifications → Enable
+   Push Notifications** once on that device/browser (this has to be a
+   real click — browsers block permission prompts that aren't a direct
+   response to one). It stays on for that device until they turn it off or
+   deliberately clear site data.
+
+Without this setup, the app works exactly as before — notifications just
+go out by email only. A `firebase-messaging-sw.js` file at the project
+root is required by Firebase Cloud Messaging to be at exactly that path;
+if you ever change the Firebase project this app points to, update the
+config duplicated near the top of that file to match (a service worker
+can't read `js/firebase-sync.js` directly, so it's a small, deliberate
+duplication — the comment in the file points this out too).
+
 ### Connecting Google Drive
 
 Google requires every app that uses Sign-In or Drive access to be
@@ -295,6 +352,104 @@ same browser tab; the reminder exists for the far more common case of a
 school that hasn't connected Drive at all, or whose admin only opens the
 app occasionally. **Settings → Google Drive Sync** always shows the exact
 last-backup time.
+
+### Install as an app (works offline)
+
+This app is a PWA (Progressive Web App) — on Chrome/Edge/Android an
+**📲 Install App** button appears in the sidebar once the browser decides
+the app qualifies (usually within a few seconds of your first visit);
+clicking it adds a proper app icon to your home screen/desktop that opens
+without browser chrome. On iPhone/iPad (Safari has no install prompt of its
+own), use the Share button → **Add to Home Screen** instead.
+
+Once installed (or even just visited once in a regular browser tab), the
+app's own files are cached by a service worker (`sw.js`) so it still opens
+with no internet connection at all — this app already stores its data in
+local storage, so a school not using Firebase Sync can keep working
+entirely offline. Firebase Sync itself, naturally, still needs a real
+connection to actually sync; while offline it just resumes the moment the
+connection comes back. If you edit any of the app's own files after
+deploying, bump `CACHE_VERSION` at the top of `sw.js` so returning visitors
+pick up the change instead of a stale cached copy.
+
+### WhatsApp
+
+Wherever a guardian's phone number appears (a student's profile, an unpaid
+invoice, a message thread with a teacher), a **💬 WhatsApp** button opens
+WhatsApp with a message already filled in, ready to send — no setup, no
+account, no cost. It assumes a Liberian number when none is given a
+country code (e.g. `0770-123-456`); a guardian outside Liberia should have
+their number saved with its own country code already included.
+
+This is a one-click deep link, not automatic sending — a person still has
+to press send. Fully automatic WhatsApp messages (matching how the email
+notifications work) would need a paid Meta WhatsApp Business API account
+and a backend to call it, which is a substantially bigger undertaking; this
+gets you most of the day-to-day convenience without that cost or setup.
+
+### QR Codes
+
+Two kinds of printable QR codes, and one page to scan them:
+
+- **Student ID cards** (Students → Print ID Cards) each carry a QR code
+  identifying that student.
+- **Library book labels** (Library → Print Book Labels, one per title in
+  the catalog — not per physical copy) each carry a QR code identifying
+  that book. Print one and slip it inside the front cover of each copy.
+- **QR Scanner** (its own page in the sidebar, and a "📷 Scan…" button on
+  the Attendance and Library pages) opens the device camera and decodes
+  codes as it sees them:
+  - In **Attendance mode**, scanning a student's ID card marks them
+    present for today, right there — handy for a quick line-up at the
+    gate or classroom door.
+  - In **Library mode**, scanning a book label shows who has it out (with
+    a one-tap "Mark Returned"), or offers to check it out to a student
+    picked from a dropdown if a copy is free; scanning a student's ID card
+    instead shows their current loans, flagging anything overdue.
+
+No camera, or a school hall too noisy/crowded to rely on one? Every mode
+also has a manual fallback: a dropdown to pick the student/book by name and
+click a button, and a plain text field that a cheap USB "barcode scanner"
+(the kind that types the code like a keyboard, no drivers needed) can type
+straight into.
+
+QR decoding happens entirely on-device — nothing scanned is ever sent
+anywhere. The QR encode/decode libraries are bundled locally in
+`assets/vendor/` (not loaded from a CDN), so this all keeps working
+offline; see `assets/vendor/LICENSES.md` for their open-source licenses.
+
+### Language
+
+A small English/French switcher — **EN | FR** — appears on the login
+screen and in the sidebar footer once signed in. It's a **starting
+scaffold, not full translation coverage**: it currently covers the
+always-on-screen chrome — the login screen, the sidebar navigation and
+section headings, the page title, and a couple of header controls — since
+those are what every user sees regardless of role or page. The choice is
+remembered per device (`localStorage`), so it doesn't need to be set again
+next visit.
+
+What it does **not** yet cover: the hundreds of labels, buttons, table
+headers and messages generated inside each module (Students, Fees,
+Grades, and so on) — those stay in English. Extending coverage is
+additive, not a rewrite:
+
+1. Wrap the string. For a static piece of HTML, add
+   `data-i18n="some.key"` (translates the element's text),
+   `data-i18n-placeholder="some.key"` (an input's placeholder), or
+   `data-i18n-title="some.key"` (a `title` tooltip). For a string built in
+   JavaScript, call `I18N.t('some.key', 'English fallback text')` in place
+   of the literal string.
+2. Add that key to **both** the `en` and `fr` blocks in `js/i18n.js`'s
+   `I18N_DICT`. (`I18N.t()` gracefully falls back to English, then to the
+   key itself, if a translation is missing — so a half-finished addition
+   never shows a blank field, but it's still worth filling in both.)
+
+No build step, and no other file needs to change — `I18N.applyStatic()`
+re-sweeps the whole page for `data-i18n*` attributes on every language
+switch. Adding a third language means adding one more block to
+`I18N_DICT` (e.g. `es: { ... }`) — `I18N.renderSwitchers()` picks up
+every key of `I18N_DICT` automatically, no separate list to update.
 
 ## Online Fee Payment
 
@@ -487,11 +642,15 @@ dev tools. A few things worth knowing even so:
 ## Project structure
 
 ```
-index.html           Shell: login screen, app layout, all <script> includes
+index.html            Shell: login screen, app layout, all <script> includes
+manifest.json         PWA manifest (install as an app)
+sw.js                 Service worker — offline app-shell caching
+firebase-messaging-sw.js  Service worker required by push notifications (FCM)
 firestore.rules       Security rules to paste into the Firebase Console
 firebase.json          Cloud Functions deploy config (for Stripe payments)
 .firebaserc             Points the Firebase CLI at your project (edit this)
-functions/             Cloud Functions backend: Stripe Checkout + webhook
+functions/             Cloud Functions backend: Stripe Checkout + webhook + push
+assets/vendor/         Vendored QR encode/decode libraries — see LICENSES.md there
 css/style.css         Supplemental styles (Tailwind CDN handles the rest)
 js/data.js            Data model, sample data, localStorage persistence, CRUD
 js/drive.js           Google Drive OAuth + save/load, local JSON export/import
@@ -499,8 +658,16 @@ js/firebase-sync.js   Firebase Auth + Firestore real-time sync (write-through)
 js/stripe-pay.js      Card/Google Pay checkout client (calls the Cloud Function)
 js/auth.js            Login/session/role logic
 js/ui.js              Shared UI helpers, routing/navigation, global search
+js/i18n.js            Language scaffold (English/French) — see "Language" below
+js/theme.js           Dark mode
+js/pwa.js             Service worker registration + "Install app" prompt
+js/push.js            Push notifications (FCM) client
+js/qr.js              QR code encode helpers (ID cards, book labels)
+js/qrscan.js          QR Scanner page (camera + manual/USB-scanner fallback)
 js/students.js        Students module (CRUD, CSV import, ID cards, print)
+js/alumni.js          Alumni tracking (graduated students)
 js/teachers.js        Teachers module
+js/staff.js           Staff attendance & leave module
 js/subjects.js        Subjects module (CRUD, duplicate-code + in-use checks)
 js/classes.js         Classes/Sections + Timetable module + Promotion
 js/attendance.js      Attendance module
@@ -511,11 +678,12 @@ js/announcements.js   Announcements / Notice Board module
 js/messages.js        Teacher <-> parent messaging inbox
 js/assignments.js     Assignments / Homework module + student submissions
 js/behavior.js        Behavior / Discipline Log module
-js/library.js         Library Management module (catalog + loans)
+js/library.js         Library Management module (catalog + loans + book labels)
 js/calendar.js        Events & School Calendar module
 js/dashboard.js       Dashboard module (role-aware, with widgets)
 js/users.js           User account management (Admin)
-js/settings.js        School info, backup/sync, reset (Admin)
+js/settings.js        School info, branding, backup/sync, reset (Admin)
+js/auditlog.js        Audit Log (Admin)
 js/notifications.js   Notification bell (aggregates + per-user "seen" cursor)
 js/main.js            App bootstrap and shell wiring
 ```
