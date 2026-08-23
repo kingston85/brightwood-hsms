@@ -39,9 +39,10 @@ to Sample Data**, or just edit/delete the sample records as you go.
   and section summaries (Teacher), and personal attendance/grades/fees
   (Student/Parent).
 - **Students** — full CRUD, search & filter by class/section, student
-  profile with attendance rate, average score and fee balance at a glance.
+  profile with attendance rate, average score and fee balance at a glance,
+  and an optional real profile photo (see "Profile Photos" below).
 - **Teachers** — staff records, subject specialty, class-teacher
-  assignment.
+  assignment, and an optional real profile photo.
 - **Subjects** — admin manages the school's subject list (name + subject
   code, with duplicate-code validation), used throughout timetables,
   gradebook and exam scheduling; a subject in use shows how many
@@ -298,6 +299,44 @@ if you ever change the Firebase project this app points to, update the
 config duplicated near the top of that file to match (a service worker
 can't read `js/firebase-sync.js` directly, so it's a small, deliberate
 duplication — the comment in the file points this out too).
+
+### Profile Photos (optional, requires Firebase Setup + enabling Storage)
+
+Students and teachers can each have a real photo instead of the initials
+circle — it shows up on their profile, ID cards, the Students/Teachers
+lists, Alumni, the QR scanner, and their own dashboard. Uploads are handled
+by **Firebase Storage** — a separate product from Firestore, so it needs
+its own one-time setup even if you've already done Firebase Setup above:
+
+1. In the [Firebase Console](https://console.firebase.google.com/), open
+   your project → **Build → Storage** → **Get started**, and accept the
+   default (production mode) bucket location. You don't need to touch
+   anything else in the console — the rules below replace the defaults.
+2. Deploy `storage.rules` (a new file alongside `firestore.rules`):
+   ```
+   firebase deploy --only storage
+   ```
+   (If this is the very first time you're using the `firebase` CLI on this
+   project for anything beyond Firestore, run `firebase init storage` first
+   and point it at the existing `storage.rules` file rather than letting it
+   generate a new one.)
+3. Reload the app. In **Students** or **Teachers**, click the 📷 button on
+   any row (or **📷 Change Photo** inside a student's profile) to upload a
+   photo for them. A parent/student or a teacher can also update their own
+   photo from their own Dashboard.
+
+Every upload is resized and compressed to a small JPEG in the browser
+before it ever leaves the device (nothing near the original file size gets
+uploaded), and `storage.rules` enforces who can upload where: an admin can
+set anyone's photo; a parent/student or teacher can only ever replace their
+own — never someone else's, and never any other field on the record.
+
+Without this setup, uploading a photo shows a plain-language error
+explaining Storage isn't configured yet — everything else in the app keeps
+working exactly as before. In local-storage demo mode (no Firebase Sync at
+all), photos work immediately with no setup, the same way the school logo
+in Settings does — there's no cloud storage to upload to locally, so the
+compressed photo is saved directly on the record instead.
 
 ### Connecting Google Drive
 
@@ -653,6 +692,7 @@ manifest.json         PWA manifest (install as an app)
 sw.js                 Service worker — offline app-shell caching
 firebase-messaging-sw.js  Service worker required by push notifications (FCM)
 firestore.rules       Security rules to paste into the Firebase Console
+storage.rules          Security rules for profile photos (Firebase Storage — separate from Firestore)
 firebase.json          Cloud Functions deploy config (for Stripe payments)
 .firebaserc             Points the Firebase CLI at your project (edit this)
 functions/             Cloud Functions backend: Stripe Checkout + webhook + push
@@ -670,6 +710,7 @@ js/pwa.js             Service worker registration + "Install app" prompt
 js/push.js            Push notifications (FCM) client
 js/qr.js              QR code encode helpers (ID cards, book labels)
 js/qrscan.js          QR Scanner page (camera + manual/USB-scanner fallback)
+js/photo.js            Profile photos — upload/compress/display (Storage or local mode)
 js/students.js        Students module (CRUD, CSV import, ID cards, print)
 js/alumni.js          Alumni tracking (graduated students)
 js/teachers.js        Teachers module
