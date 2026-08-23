@@ -12,11 +12,20 @@
    css/style.css's canvas note and dashboard.js). Firebase Sync itself
    obviously still needs a real connection to actually sync.
 
-   Bump CACHE_VERSION any time you deploy a change to a cached file, so
-   returning visitors pick up the update instead of a stale cached copy.
+   Network-first, falling back to cache only when the network request fails
+   (i.e. actually offline). An earlier version of this file was cache-first
+   with a background refresh — that meant anyone who'd already opened the
+   app once kept being served the JS from their FIRST visit until a second
+   reload happened to complete the background refresh, which on some hosts'
+   caching headers could take far longer than expected. For an app that
+   ships updates, "instantly correct when online, cache is just the offline
+   fallback" is the safer default — bump CACHE_VERSION below on top of that
+   whenever you deploy a change, purely so old cached entries actually get
+   cleaned up (evicted in the activate handler) instead of lingering
+   unused — it's no longer what makes an update actually show up.
    ========================================================================== */
 
-const CACHE_VERSION = 'hsms-v2';
+const CACHE_VERSION = 'hsms-v3';
 
 const PRECACHE_URLS = [
   '.',
@@ -57,17 +66,16 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
 
   event.respondWith(
-    caches.match(req).then((cached) => {
-      const network = fetch(req).then((res) => {
-        if (res && res.ok) {
-          const copy = res.clone();
-          caches.open(CACHE_VERSION).then((cache) => cache.put(req, copy));
-        }
-        return res;
-      }).catch(() => cached); // offline — fall back to whatever's cached
-      // Cache-first for instant loads, but still refresh the cache in the
-      // background from the network when available.
-      return cached || network;
-    })
+    // cache: 'no-store' bypasses the BROWSER's own HTTP cache too, not just
+    // this service worker's cache — otherwise a host that sends long-lived
+    // Cache-Control headers on JS files could hand back a "fresh" network
+    // response that's actually just as stale as what we already had.
+    fetch(req, { cache: 'no-store' }).then((res) => {
+      if (res && res.ok) {
+        const copy = res.clone();
+        caches.open(CACHE_VERSION).then((cache) => cache.put(req, copy));
+      }
+      return res;
+    }).catch(() => caches.match(req)) // offline, or the request failed — fall back to whatever's cached
   );
 });
