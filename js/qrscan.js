@@ -232,7 +232,7 @@ function scanMarkAttendance(studentId) {
     <div class="flex items-center gap-3">
       <div class="w-12 h-12 shrink-0 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-lg font-bold">${initialsAvatar(s.firstName + ' ' + s.lastName)}</div>
       <div>
-        <div class="font-bold">${esc(s.firstName)} ${esc(s.lastName)}</div>
+        <div class="font-bold">${studentLinkHTML(s.id, `${s.firstName} ${s.lastName}`)}</div>
         <div class="text-xs text-slate-400">${DB.classSectionLabel(s.classId, s.sectionId)} &middot; ${esc(s.admissionNo)}</div>
         <div class="text-emerald-600 text-sm font-semibold mt-0.5">✓ Marked Present — ${esc(date)}</div>
       </div>
@@ -249,7 +249,7 @@ function scanLibraryBook(bookId, opts) {
   const avail = bookAvailable(bookId);
   const loanRows = openLoans.map(l => `
     <div class="flex items-center justify-between text-sm border-t border-slate-100 pt-2 mt-2 first:border-0 first:pt-0 first:mt-0">
-      <div>${esc(DB.studentName(l.studentId))} <span class="text-xs text-slate-400">due ${esc(l.dueDate)}</span> ${loanStatus(l) === 'Overdue' ? badge('Overdue', 'red') : ''}</div>
+      <div>${studentLinkHTML(l.studentId)} <span class="text-xs text-slate-400">due ${esc(l.dueDate)}</span> ${loanStatus(l) === 'Overdue' ? badge('Overdue', 'red') : ''}</div>
       <button class="btn btn-secondary btn-sm no-print" onclick="scanReturnLoan('${l.id}')">Mark Returned</button>
     </div>
   `).join('');
@@ -311,7 +311,7 @@ function scanLibraryLookup(studentId) {
       <div class="flex items-center gap-3 mb-1">
         <div class="w-10 h-10 shrink-0 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-sm font-bold">${initialsAvatar(s.firstName + ' ' + s.lastName)}</div>
         <div>
-          <div class="font-bold">${esc(s.firstName)} ${esc(s.lastName)}</div>
+          <div class="font-bold">${studentLinkHTML(s.id, `${s.firstName} ${s.lastName}`)}</div>
           <div class="text-xs text-slate-400">${DB.classSectionLabel(s.classId, s.sectionId)}</div>
         </div>
       </div>
