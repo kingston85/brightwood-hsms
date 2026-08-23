@@ -21,10 +21,15 @@ function notifMarkSeenNow() {
 
 // Builds the notification feed for whoever is signed in. Each item has a
 // `when` (ISO date or day-string, compared against the last-seen cursor to
-// decide if it's "new") and a `route` to jump to when clicked. Items that
-// aren't really about "new since last visit" (like a bill coming due) are
-// still included but marked `sticky: true` so they show up every time
-// regardless of the seen cursor, instead of disappearing after one glance.
+// decide if it's "new"/bold in the dropdown) and a `route` to jump to when
+// clicked. Note that "unread" here only means "you haven't opened the bell
+// since this appeared" — it's not the same as "resolved". A pending payment,
+// an unread message, or a fee due soon all keep showing up in the list for
+// as long as they're actually still true (each is filtered by its own real
+// condition above, e.g. `status === 'Pending'`), they just stop being
+// bold/counted in the badge once you've seen them, exactly like every other
+// item — clicking into Fees/Messages to actually resolve one is a separate
+// step from just acknowledging the alert.
 function buildNotifications() {
   const me = Auth.currentUser;
   if (!me) return [];
@@ -32,13 +37,13 @@ function buildNotifications() {
 
   if (me.role === 'admin') {
     DB.data.paymentSubmissions.filter(p => p.status === 'Pending').forEach((p) => {
-      items.push({ icon: '💵', text: `Payment submitted by ${DB.studentName(p.studentId)} awaiting verification`, when: p.submittedAt, route: 'fees', sticky: true });
+      items.push({ icon: '💵', text: `Payment submitted by ${DB.studentName(p.studentId)} awaiting verification`, when: p.submittedAt, route: 'fees' });
     });
   }
 
   if (me.role === 'teacher' || me.role === 'student') {
     allThreads().filter(t => t.unread > 0).forEach((t) => {
-      items.push({ icon: '💬', text: `${t.unread > 1 ? `${t.unread} new messages` : 'New message'} from ${t.name}`, when: t.lastAt, route: 'messages', sticky: true });
+      items.push({ icon: '💬', text: `${t.unread > 1 ? `${t.unread} new messages` : 'New message'} from ${t.name}`, when: t.lastAt, route: 'messages' });
     });
   }
 
@@ -57,13 +62,13 @@ function buildNotifications() {
       });
       const in7Days = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
       DB.invoicesForStudent(stu.id).filter(i => (i.amount - i.paidAmount) > 0 && i.dueDate && i.dueDate <= in7Days).forEach((i) => {
-        items.push({ icon: '⏰', text: `${i.label} due ${i.dueDate}`, when: i.dueDate, route: 'fees', sticky: true });
+        items.push({ icon: '⏰', text: `${i.label} due ${i.dueDate}`, when: i.dueDate, route: 'fees' });
       });
     }
   }
 
   const lastSeen = notifLastSeen();
-  items.forEach((it) => { it.unread = it.sticky || (it.when || '') > lastSeen; });
+  items.forEach((it) => { it.unread = (it.when || '') > lastSeen; });
   items.sort((a, b) => (b.when || '').localeCompare(a.when || ''));
   return items.slice(0, 30);
 }
@@ -113,11 +118,10 @@ function toggleNotifDropdown() {
       // Clicking any single notification means "I've seen these" just as
       // much as the explicit Mark all read button does — advance the same
       // cursor so the badge/highlight clear immediately instead of only
-      // reacting to that one dedicated button. Sticky items (pending
-      // payments, unread messages, upcoming fees) are unaffected — they're
-      // excluded from the cursor check on purpose, since they represent an
-      // ongoing state rather than a one-time "new since last visit" event,
-      // and should keep showing until the underlying thing is resolved.
+      // reacting to that one dedicated button. This does NOT remove a
+      // pending payment / unread message / upcoming fee from the list —
+      // those stay listed for as long as they're genuinely still true — it
+      // only stops them being bold/counted, the same as any other item.
       notifMarkSeenNow();
       renderNotifBell();
       dd.classList.add('hidden');
