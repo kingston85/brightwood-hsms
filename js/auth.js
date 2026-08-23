@@ -48,6 +48,7 @@ const Auth = {
 
   logout() {
     const wasFirebase = this.currentUser && this.currentUser._firebase;
+    if (typeof stopQrScan === 'function') stopQrScan(); // release the camera if it was left running
     this.currentUser = null;
     sessionStorage.removeItem(SESSION_KEY);
     if (wasFirebase && typeof FB !== 'undefined' && FB.active) {
