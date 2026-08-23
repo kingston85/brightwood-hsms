@@ -250,6 +250,15 @@ function renderTeacherDashboard() {
   const todaysClasses = DB.data.timetable.filter(tt => tt.teacherId === Auth.currentUser.linkedId && tt.day === dayShort).sort((a,b)=>a.period-b.period);
 
   document.getElementById('mainContent').innerHTML = `
+    ${t ? `
+    <div class="card p-5 flex items-center gap-4">
+      ${avatarHTML(t.photoURL, t.firstName+' '+t.lastName, 'w-14 h-14', 'bg-emerald-100 text-emerald-700 text-lg')}
+      <div class="flex-1">
+        <h2 class="font-bold text-lg">${esc(t.firstName)} ${esc(t.lastName)}</h2>
+        <p class="text-sm text-slate-500">${DB.subjectName(t.subjectSpecialty)}</p>
+      </div>
+      <button class="btn btn-secondary btn-sm no-print" onclick="openPhotoUploadModal('teachers','${t.id}', () => { renderDashboard(); refreshHeaderAvatar(); })">📷 Change Photo</button>
+    </div>` : ''}
     <div class="grid sm:grid-cols-3 gap-4">
       ${statCard('🏫', 'My Sections', sections.length, 'brand', "navigate('classes')")}
       ${statCard('🎓', 'My Students', studentCount, 'emerald', "navigate('students')")}
@@ -293,11 +302,12 @@ function renderStudentDashboard() {
 
   document.getElementById('mainContent').innerHTML = `
     <div class="card p-5 flex items-center gap-4">
-      <div class="w-14 h-14 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-lg font-bold">${initialsAvatar(stu.firstName+' '+stu.lastName)}</div>
-      <div>
+      ${avatarHTML(stu.photoURL, stu.firstName+' '+stu.lastName, 'w-14 h-14', 'bg-brand-100 text-brand-700 text-lg')}
+      <div class="flex-1">
         <h2 class="font-bold text-lg">${esc(stu.firstName)} ${esc(stu.lastName)}</h2>
         <p class="text-sm text-slate-500">${DB.classSectionLabel(stu.classId, stu.sectionId)} &middot; ${esc(stu.admissionNo)}</p>
       </div>
+      <button class="btn btn-secondary btn-sm no-print" onclick="openPhotoUploadModal('students','${stu.id}', () => { renderDashboard(); refreshHeaderAvatar(); })">📷 Change Photo</button>
     </div>
     <div class="grid sm:grid-cols-3 gap-4">
       ${statCard('📝', 'Attendance Rate', (rate ?? '—') + (rate!==null?'%':''), rate!==null && rate < 80 ? 'red' : 'emerald', "navigate('attendance')")}
