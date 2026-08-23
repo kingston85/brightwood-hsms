@@ -300,43 +300,32 @@ config duplicated near the top of that file to match (a service worker
 can't read `js/firebase-sync.js` directly, so it's a small, deliberate
 duplication — the comment in the file points this out too).
 
-### Profile Photos (optional, requires Firebase Setup + enabling Storage)
+### Profile Photos (works with no extra setup)
 
 Students and teachers can each have a real photo instead of the initials
 circle — it shows up on their profile, ID cards, the Students/Teachers
-lists, Alumni, the QR scanner, and their own dashboard. Uploads are handled
-by **Firebase Storage** — a separate product from Firestore, so it needs
-its own one-time setup even if you've already done Firebase Setup above:
+lists, Alumni, the QR scanner, and their own dashboard. There's nothing to
+set up: every photo is resized and compressed to a small JPEG in the
+browser, then saved directly on the student/teacher record — the same
+trick the school logo in Settings already uses. That works identically
+whether Firebase Sync is on (it syncs through Firestore like any other
+field on the record) or the app is running in pure local-storage demo mode.
 
-1. In the [Firebase Console](https://console.firebase.google.com/), open
-   your project → **Build → Storage** → **Get started**, and accept the
-   default (production mode) bucket location. You don't need to touch
-   anything else in the console — the rules below replace the defaults.
-2. Deploy `storage.rules` (a new file alongside `firestore.rules`):
-   ```
-   firebase deploy --only storage
-   ```
-   (If this is the very first time you're using the `firebase` CLI on this
-   project for anything beyond Firestore, run `firebase init storage` first
-   and point it at the existing `storage.rules` file rather than letting it
-   generate a new one.)
-3. Reload the app. In **Students** or **Teachers**, click the 📷 button on
-   any row (or **📷 Change Photo** inside a student's profile) to upload a
-   photo for them. A parent/student or a teacher can also update their own
-   photo from their own Dashboard.
+This deliberately avoids **Firebase Storage** (a separate product from
+Firestore) — as of late 2024 Google requires the paid Blaze plan just to
+enable it, so this app never depends on it for anything.
 
-Every upload is resized and compressed to a small JPEG in the browser
-before it ever leaves the device (nothing near the original file size gets
-uploaded), and `storage.rules` enforces who can upload where: an admin can
-set anyone's photo; a parent/student or teacher can only ever replace their
+In **Students** or **Teachers**, click the 📷 button on any row (or
+**📷 Change Photo** inside a student's profile) to upload a photo for them.
+A parent/student or a teacher can also update their own photo from their
+own Dashboard. `firestore.rules` enforces who can set whose photo: an admin
+can set anyone's; a parent/student or teacher can only ever replace their
 own — never someone else's, and never any other field on the record.
 
-Without this setup, uploading a photo shows a plain-language error
-explaining Storage isn't configured yet — everything else in the app keeps
-working exactly as before. In local-storage demo mode (no Firebase Sync at
-all), photos work immediately with no setup, the same way the school logo
-in Settings does — there's no cloud storage to upload to locally, so the
-compressed photo is saved directly on the record instead.
+One tradeoff worth knowing: because the photo lives on the record itself
+rather than in separate cloud storage, it counts against Firestore's 1MiB
+per-document size limit — which is exactly why the app compresses fairly
+aggressively (480px, well under 400KB) before saving.
 
 ### Connecting Google Drive
 
@@ -692,8 +681,7 @@ manifest.json         PWA manifest (install as an app)
 sw.js                 Service worker — offline app-shell caching
 firebase-messaging-sw.js  Service worker required by push notifications (FCM)
 firestore.rules       Security rules to paste into the Firebase Console
-storage.rules          Security rules for profile photos (Firebase Storage — separate from Firestore)
-firebase.json          Cloud Functions deploy config (for Stripe payments)
+firebase.json          Cloud Functions deploy config (for Stripe payments) + firestore.rules path
 .firebaserc             Points the Firebase CLI at your project (edit this)
 functions/             Cloud Functions backend: Stripe Checkout + webhook + push
 assets/vendor/         Vendored QR encode/decode libraries — see LICENSES.md there
