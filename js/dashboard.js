@@ -25,10 +25,10 @@ function renderAdminDashboard() {
 
   document.getElementById('mainContent').innerHTML = `
     <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      ${statCard('🎓', 'Total Students', totalStudents, 'brand')}
-      ${statCard('🧑‍🏫', 'Total Teachers', totalTeachers, 'emerald')}
-      ${statCard('🏫', 'Sections', totalSections, 'amber')}
-      ${statCard('📝', 'Attendance Rate', attRate + '%', attRate >= 85 ? 'emerald' : 'red')}
+      ${statCard('🎓', 'Total Students', totalStudents, 'brand', "navigate('students')")}
+      ${statCard('🧑‍🏫', 'Total Teachers', totalTeachers, 'emerald', "navigate('teachers')")}
+      ${statCard('🏫', 'Sections', totalSections, 'amber', "navigate('classes')")}
+      ${statCard('📝', 'Attendance Rate', attRate + '%', attRate >= 85 ? 'emerald' : 'red', "navigate('attendance'); setTimeout(() => setAttendanceTab('report'), 30)")}
     </div>
     ${pendingPayments.length ? `
     <div class="card p-4 border-l-4 border-l-amber-400 flex items-center justify-between no-print">
@@ -61,8 +61,8 @@ function renderAdminDashboard() {
     <div class="card p-5">
       <h3 class="font-bold mb-3">Class Teachers Overview</h3>
       <div class="overflow-x-auto">
-        <table class="data-table"><thead><tr><th>Class</th><th>Section</th><th>Class Teacher</th><th>Students</th></tr></thead>
-        <tbody>${DB.allSections().map(s => `<tr><td>${esc(s.className)}</td><td>${esc(s.sectionName)}</td><td>${s.classTeacherId ? DB.teacherName(s.classTeacherId) : '<span class="text-amber-600">Unassigned</span>'}</td><td>${DB.studentsInSection(s.sectionId).length}</td></tr>`).join('')}</tbody></table>
+        <table class="data-table"><thead><tr><th>Class</th><th>Section</th><th>Class Teacher</th><th>Students</th><th class="no-print"></th></tr></thead>
+        <tbody>${DB.allSections().map(s => `<tr><td>${esc(s.className)}</td><td>${esc(s.sectionName)}</td><td>${s.classTeacherId ? DB.teacherName(s.classTeacherId) : '<span class="text-amber-600">Unassigned</span>'}</td><td>${DB.studentsInSection(s.sectionId).length}</td><td class="text-right no-print space-x-1"><button class="btn btn-secondary btn-sm" onclick="goToSectionStudents('${s.classId}','${s.sectionId}')">View</button><button class="btn btn-secondary btn-sm" onclick="goToSectionAttendance('${s.sectionId}')">📝</button></td></tr>`).join('')}</tbody></table>
       </div>
     </div>
   `;
@@ -158,9 +158,14 @@ function assignmentsDueWidget(sectionIds) {
   `;
 }
 
-function statCard(icon, label, value, color) {
+// `onClick`, when given, is a JS expression string (e.g. "navigate('fees')")
+// — turns the tile into a real link to wherever that number comes from,
+// instead of a dead-end statistic.
+function statCard(icon, label, value, color, onClick) {
   const colors = { brand: 'text-brand-600', emerald: 'text-emerald-600', amber: 'text-amber-600', red: 'text-red-600' };
-  return `<div class="card stat-card"><div class="text-2xl mb-1">${icon}</div><div class="stat-value ${colors[color]}">${value}</div><div class="text-xs text-slate-400">${label}</div></div>`;
+  const inner = `<div class="text-2xl mb-1">${icon}</div><div class="stat-value ${colors[color]}">${value}</div><div class="text-xs text-slate-400">${label}</div>`;
+  if (onClick) return `<button type="button" class="card stat-card text-left w-full hover:shadow-md hover:border-brand-200 transition-shadow no-print" onclick="${onClick}">${inner}</button>`;
+  return `<div class="card stat-card">${inner}</div>`;
 }
 
 function chartsAvailable() {
@@ -246,9 +251,9 @@ function renderTeacherDashboard() {
 
   document.getElementById('mainContent').innerHTML = `
     <div class="grid sm:grid-cols-3 gap-4">
-      ${statCard('🏫', 'My Sections', sections.length, 'brand')}
-      ${statCard('🎓', 'My Students', studentCount, 'emerald')}
-      ${statCard('🗓️', "Today's Periods", todaysClasses.length, 'amber')}
+      ${statCard('🏫', 'My Sections', sections.length, 'brand', "navigate('classes')")}
+      ${statCard('🎓', 'My Students', studentCount, 'emerald', "navigate('students')")}
+      ${statCard('🗓️', "Today's Periods", todaysClasses.length, 'amber', "navigate('classes'); setTimeout(() => setClassesTab('timetable'), 30)")}
     </div>
     <div class="card p-5 overflow-x-auto">
       <h3 class="font-bold mb-3">Today's Schedule (${dayShort})</h3>
@@ -258,11 +263,11 @@ function renderTeacherDashboard() {
     </div>
     <div class="card p-5 overflow-x-auto">
       <h3 class="font-bold mb-3">My Sections</h3>
-      <table class="data-table"><thead><tr><th>Class</th><th>Section</th><th>Role</th><th>Students</th><th>Avg. Attendance</th></tr></thead><tbody>
+      <table class="data-table"><thead><tr><th>Class</th><th>Section</th><th>Role</th><th>Students</th><th>Avg. Attendance</th><th class="no-print"></th></tr></thead><tbody>
         ${sections.map(s => {
           const list = DB.studentsInSection(s.sectionId);
           const avgAtt = Math.round(list.reduce((sum, st) => sum + (DB.attendanceRateFor(st.id) || 0), 0) / (list.length || 1));
-          return `<tr><td>${esc(s.className)}</td><td>${esc(s.sectionName)}</td><td>${s.classTeacherId===Auth.currentUser.linkedId ? badge('Class Teacher','blue') : badge('Subject Teacher','slate')}</td><td>${list.length}</td><td>${avgAtt}%</td></tr>`;
+          return `<tr><td>${esc(s.className)}</td><td>${esc(s.sectionName)}</td><td>${s.classTeacherId===Auth.currentUser.linkedId ? badge('Class Teacher','blue') : badge('Subject Teacher','slate')}</td><td>${list.length}</td><td>${avgAtt}%</td><td class="text-right no-print space-x-1"><button class="btn btn-secondary btn-sm" onclick="goToSectionStudents('${s.classId}','${s.sectionId}')">View</button><button class="btn btn-secondary btn-sm" onclick="goToSectionAttendance('${s.sectionId}')">📝</button></td></tr>`;
         }).join('')}
       </tbody></table>
     </div>
@@ -295,9 +300,9 @@ function renderStudentDashboard() {
       </div>
     </div>
     <div class="grid sm:grid-cols-3 gap-4">
-      ${statCard('📝', 'Attendance Rate', (rate ?? '—') + (rate!==null?'%':''), rate!==null && rate < 80 ? 'red' : 'emerald')}
-      ${statCard('📚', 'Average Score', (avg ?? '—') + (avg!==null?'%':''), 'brand')}
-      ${statCard('💵', 'Fee Balance', money(balance), balance > 0 ? 'red' : 'emerald')}
+      ${statCard('📝', 'Attendance Rate', (rate ?? '—') + (rate!==null?'%':''), rate!==null && rate < 80 ? 'red' : 'emerald', "navigate('attendance')")}
+      ${statCard('📚', 'Average Score', (avg ?? '—') + (avg!==null?'%':''), 'brand', "navigate('grades')")}
+      ${statCard('💵', 'Fee Balance', money(balance), balance > 0 ? 'red' : 'emerald', "navigate('fees')")}
     </div>
     <div class="card p-5 overflow-x-auto">
       <h3 class="font-bold mb-3">Today's Schedule (${dayShort})</h3>
