@@ -26,6 +26,28 @@ function renderSettings() {
       </div>
 
       <div class="card p-5">
+        <h3 class="font-bold mb-3">School Branding</h3>
+        <p class="text-sm text-slate-500 mb-4">Shown in the sidebar once signed in, and on printed report cards &amp; ID cards. The pre-sign-in login screen keeps the default Brightwood mark.</p>
+        <div class="flex items-center gap-4 mb-4">
+          <div class="w-16 h-16 rounded-lg border border-slate-200 flex items-center justify-center overflow-hidden bg-slate-50 shrink-0">
+            ${meta.schoolLogo ? `<img src="${meta.schoolLogo}" class="w-full h-full object-cover" alt="Current logo"/>` : '<span class="text-xs text-slate-400">No logo</span>'}
+          </div>
+          <div class="space-y-2">
+            <label class="btn btn-secondary btn-sm cursor-pointer">
+              Upload Logo
+              <input id="logoFileInput" type="file" accept="image/*" class="hidden"/>
+            </label>
+            ${meta.schoolLogo ? `<button class="btn btn-danger btn-sm" onclick="removeSchoolLogo()">Remove</button>` : ''}
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+          <label class="form-label !mb-0">Accent Color</label>
+          <input id="brandColorInput" type="color" value="${meta.brandColor || '#4f46e5'}" class="w-10 h-9 rounded border border-slate-300 cursor-pointer"/>
+          <button class="btn btn-secondary btn-sm" onclick="resetBrandColor()">Reset to Default</button>
+        </div>
+      </div>
+
+      <div class="card p-5">
         <h3 class="font-bold mb-3">Firebase Sync <span class="badge ${FB.active ? 'badge-green' : FB.isConfigured() ? 'badge-amber' : 'badge-slate'}">${FB.active ? 'Live' : FB.isConfigured() ? 'Configured' : 'Not set up'}</span></h3>
         <p class="text-sm text-slate-500 mb-4">The recommended option: every admin, teacher and student/parent account shares one live database in real time, with access enforced by Firestore Security Rules on the server — not just hidden in this browser. Requires a one-time Firebase project setup — see README.md → "Firebase Setup".</p>
         ${FB.active
@@ -38,6 +60,17 @@ function renderSettings() {
           <button class="btn btn-secondary btn-sm" onclick="runFirebaseDiagnostics()">🩺 Run Diagnostics</button>
           <p class="text-xs text-slate-400 mt-2">Checks your setup step by step and explains any problem in plain English — no browser console needed.</p>
           <div id="diagResults" class="mt-3 space-y-2"></div>
+        </div>` : ''}
+        ${FB.active ? `
+        <div class="mt-4 pt-4 border-t border-slate-100">
+          <p class="text-sm font-semibold mb-1">🔔 Push Notifications <span class="font-normal text-xs text-slate-400">(this device)</span></p>
+          ${typeof Push === 'undefined' || !Push.isConfigured()
+            ? `<p class="text-xs text-slate-400">Not set up yet — needs a VAPID key and the sendPushOnMail Cloud Function. See README.md → "Push Notifications".</p>`
+            : Push.permissionState() === 'granted'
+              ? `<p class="text-xs text-emerald-600 mb-2">Enabled on this device.</p><button class="btn btn-secondary btn-sm" onclick="Push.disable()">Turn Off</button>`
+              : Push.permissionState() === 'denied'
+                ? `<p class="text-xs text-red-600">Blocked in this browser's site settings — allow notifications for this site to turn it back on.</p>`
+                : `<button class="btn btn-secondary btn-sm" onclick="Push.enable()">Enable Push Notifications</button>`}
         </div>` : ''}
       </div>
 
@@ -118,6 +151,82 @@ function renderSettings() {
     DB.save();
     toast('Payment settings updated.');
   };
+
+  document.getElementById('logoFileInput').onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const dataUrl = await compressLogoFile(file);
+      DB.data.meta.schoolLogo = dataUrl;
+      DB.save();
+      applyBranding();
+      toast('Logo updated.');
+      renderSettings();
+    } catch (err) {
+      toast(err.message || 'Could not use that image.');
+    }
+  };
+
+  document.getElementById('brandColorInput').onchange = (e) => {
+    DB.data.meta.brandColor = e.target.value;
+    DB.save();
+    applyBranding();
+    toast('Accent color updated.');
+  };
+}
+
+function removeSchoolLogo() {
+  DB.data.meta.schoolLogo = '';
+  DB.save();
+  applyBranding();
+  toast('Logo removed.');
+  renderSettings();
+}
+
+function resetBrandColor() {
+  DB.data.meta.brandColor = '';
+  DB.save();
+  applyBranding();
+  toast('Accent color reset.');
+  renderSettings();
+}
+
+// Logos need to stay small (Firestore documents cap at 1MB total, and this
+// field shares that budget with everything else in meta/school) but, unlike
+// the JPEG compression used for assignment photo submissions, a logo is
+// usually a simple graphic that may rely on transparency — so this keeps
+// PNG output and controls size via a small max dimension instead of a lossy
+// quality setting.
+function compressLogoFile(file) {
+  return new Promise((resolve, reject) => {
+    if (!file.type || !file.type.startsWith('image/')) { reject(new Error('Please choose an image file (PNG, JPG, etc).')); return; }
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Could not read that file.'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Could not read that image.'));
+      img.onload = () => {
+        const maxDim = 300;
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          const scale = maxDim / Math.max(width, height);
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/png');
+        if (dataUrl.length > 500000) {
+          reject(new Error('That logo is still too large even after resizing. Try a simpler image (a flat-color logo compresses much better than a photo).'));
+          return;
+        }
+        resolve(dataUrl);
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 async function runFirebaseDiagnostics() {
