@@ -64,14 +64,16 @@ function gradeEntryHTML() {
 }
 
 function saveGrades() {
+  let changed = 0;
   document.querySelectorAll('.grade-input').forEach(input => {
     const studentId = input.dataset.student;
     const val = input.value;
     if (val === '') return;
     const score = Math.max(0, Math.min(100, Number(val)));
     const existing = DB.data.grades.find(g => g.examId === GradesUI.examId && g.studentId === studentId && g.subjectId === GradesUI.subjectId);
-    if (existing) existing.score = score;
+    if (existing) { if (existing.score !== score) changed++; existing.score = score; }
     else {
+      changed++;
       const stu = DB.find('students', studentId);
       // sectionId/classId are denormalized here so Firestore Security Rules
       // can scope a teacher's write access without an extra lookup.
@@ -79,6 +81,11 @@ function saveGrades() {
     }
   });
   DB.save();
+  if (changed) {
+    const exam = DB.find('exams', GradesUI.examId);
+    const subject = DB.find('subjects', GradesUI.subjectId);
+    logAudit('Grades entered/updated', `${changed} student(s) — ${subject ? subject.name : ''} — ${exam ? exam.name : ''}`);
+  }
   toast('Grades saved.');
 }
 
@@ -135,42 +142,23 @@ function deleteExam(id) {
 
 /* ------------------------------ Report card ------------------------------ */
 
-function reportCardHTML() {
-  let studentId = GradesUI.reportStudentId;
-  let studentPicker = '';
-  if (Auth.is('student')) {
-    studentId = Auth.linkedRecord()?.id;
-  } else {
-    const scoped = scopedStudents();
-    if (!studentId || !scoped.find(s => s.id === studentId)) studentId = scoped[0]?.id;
-    GradesUI.reportStudentId = studentId;
-    studentPicker = `<select id="rStudentSelect" class="form-select !w-56">${scoped.map(s=>`<option value="${s.id}" ${s.id===studentId?'selected':''}>${esc(s.firstName)} ${esc(s.lastName)}</option>`).join('')}</select>`;
-  }
-  if (!studentId) return '<p class="text-slate-400">No student selected.</p>';
-  const stu = DB.find('students', studentId);
-  if (!stu) return '<p class="text-slate-400">Student not found.</p>';
-
+// The card itself — shared by the single-student view below and
+// printAllReportCards()'s batch print, so both always stay identical.
+function reportCardCardHTML(stu, examId, extraStyle) {
   const subjectRows = DB.data.subjects.map(sub => {
-    const rec = DB.data.grades.find(g => g.examId === GradesUI.examId && g.studentId === studentId && g.subjectId === sub.id);
+    const rec = DB.data.grades.find(g => g.examId === examId && g.studentId === stu.id && g.subjectId === sub.id);
     const pct = rec ? Math.round((rec.score / rec.maxScore) * 100) : null;
     return `<tr><td>${esc(sub.name)}</td><td class="text-center">${rec ? rec.score + '/' + rec.maxScore : '—'}</td><td class="text-center">${pct ?? '—'}${pct!==null?'%':''}</td><td class="text-center font-semibold">${DB.gradeLetter(pct)}</td></tr>`;
   }).join('');
 
-  const avg = DB.studentAverage(studentId, GradesUI.examId);
-  const exam = DB.find('exams', GradesUI.examId);
-  const rate = DB.attendanceRateFor(studentId);
+  const avg = DB.studentAverage(stu.id, examId);
+  const exam = DB.find('exams', examId);
+  const rate = DB.attendanceRateFor(stu.id);
 
   return `
-    <div class="flex flex-wrap items-center gap-3 justify-between no-print">
-      <div class="flex flex-wrap gap-2">
-        <select id="rExamSelect" class="form-select !w-52">${DB.data.exams.map(e=>`<option value="${e.id}" ${e.id===GradesUI.examId?'selected':''}>${esc(e.name)} (${esc(e.term)})</option>`).join('')}</select>
-        ${studentPicker}
-      </div>
-      <button class="btn btn-secondary" onclick="window.print()">🖨️ Print Report Card</button>
-    </div>
-
-    <div class="card p-8 max-w-2xl mx-auto" id="reportCardPrintArea">
+    <div class="card p-8 max-w-2xl mx-auto" style="${extraStyle || ''}">
       <div class="text-center mb-6">
+        ${brandLogoImgHTML('h-14 mx-auto mb-2')}
         <h2 class="font-extrabold text-xl">${esc(DB.data.meta.schoolName)}</h2>
         <p class="text-xs text-slate-400">${esc(DB.data.meta.address)}</p>
         <p class="text-sm font-semibold mt-2">Student Report Card &mdash; ${esc(exam?.name || '')} (${esc(exam?.term || '')} ${esc(exam?.year || '')})</p>
@@ -194,5 +182,62 @@ function reportCardHTML() {
         <div class="border-t border-slate-300 pt-2">Principal Signature</div>
       </div>
     </div>
+  `;
+}
+
+function reportCardHTML() {
+  let studentId = GradesUI.reportStudentId;
+  let studentPicker = '';
+  if (Auth.is('student')) {
+    studentId = Auth.linkedRecord()?.id;
+  } else {
+    const scoped = scopedStudents();
+    if (!studentId || !scoped.find(s => s.id === studentId)) studentId = scoped[0]?.id;
+    GradesUI.reportStudentId = studentId;
+    studentPicker = `<select id="rStudentSelect" class="form-select !w-56">${scoped.map(s=>`<option value="${s.id}" ${s.id===studentId?'selected':''}>${esc(s.firstName)} ${esc(s.lastName)}</option>`).join('')}</select>`;
+  }
+  if (!studentId) return '<p class="text-slate-400">No student selected.</p>';
+  const stu = DB.find('students', studentId);
+  if (!stu) return '<p class="text-slate-400">Student not found.</p>';
+
+  return `
+    <div class="flex flex-wrap items-center gap-3 justify-between no-print">
+      <div class="flex flex-wrap gap-2">
+        <select id="rExamSelect" class="form-select !w-52">${DB.data.exams.map(e=>`<option value="${e.id}" ${e.id===GradesUI.examId?'selected':''}>${esc(e.name)} (${esc(e.term)})</option>`).join('')}</select>
+        ${studentPicker}
+      </div>
+      <div class="flex gap-2">
+        ${!Auth.is('student') ? `<button class="btn btn-secondary" onclick="printAllReportCards()">🖨️ Print All (${esc(DB.classSectionLabel(stu.classId, stu.sectionId))})</button>` : ''}
+        <button class="btn btn-primary" onclick="window.print()">🖨️ Print Report Card</button>
+      </div>
+    </div>
+
+    <div id="reportCardPrintArea">${reportCardCardHTML(stu, GradesUI.examId)}</div>
+  `;
+}
+
+// Batch-prints every student in the same section as the currently selected
+// report-card student (or every student in scope, for a role with no
+// concept of "currently selected" — e.g. an admin who hasn't picked one) in
+// one combined document, each on its own page.
+function printAllReportCards() {
+  const refStudent = DB.find('students', GradesUI.reportStudentId);
+  const students = (refStudent
+    ? DB.studentsInSection(refStudent.sectionId)
+    : scopedStudents()
+  ).slice().sort((a, b) => a.firstName.localeCompare(b.firstName) || a.lastName.localeCompare(b.lastName));
+
+  if (!students.length) { toast('No students to print.'); return; }
+
+  const cards = students.map((stu, i) =>
+    reportCardCardHTML(stu, GradesUI.examId, i < students.length - 1 ? 'page-break-after: always;' : '')
+  ).join('');
+
+  document.getElementById('mainContent').innerHTML = `
+    <div class="no-print flex gap-2 mb-4">
+      <button class="btn btn-secondary" onclick="renderGradesTabBody()">&larr; Back</button>
+      <button class="btn btn-primary" onclick="window.print()">🖨️ Print ${students.length} Report Card(s)</button>
+    </div>
+    ${cards}
   `;
 }
