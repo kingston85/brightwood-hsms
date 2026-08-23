@@ -230,7 +230,7 @@ function scanMarkAttendance(studentId) {
   DB.save();
   setQrResult(`
     <div class="flex items-center gap-3">
-      <div class="w-12 h-12 shrink-0 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-lg font-bold">${initialsAvatar(s.firstName + ' ' + s.lastName)}</div>
+      ${avatarHTML(s.photoURL, s.firstName + ' ' + s.lastName, 'w-12 h-12', 'bg-emerald-100 text-emerald-700 text-lg')}
       <div>
         <div class="font-bold">${studentLinkHTML(s.id, `${s.firstName} ${s.lastName}`)}</div>
         <div class="text-xs text-slate-400">${DB.classSectionLabel(s.classId, s.sectionId)} &middot; ${esc(s.admissionNo)}</div>
@@ -309,7 +309,7 @@ function scanLibraryLookup(studentId) {
   setQrResult(`
     <div>
       <div class="flex items-center gap-3 mb-1">
-        <div class="w-10 h-10 shrink-0 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-sm font-bold">${initialsAvatar(s.firstName + ' ' + s.lastName)}</div>
+        ${avatarHTML(s.photoURL, s.firstName + ' ' + s.lastName, 'w-10 h-10', 'bg-brand-100 text-brand-700 text-sm')}
         <div>
           <div class="font-bold">${studentLinkHTML(s.id, `${s.firstName} ${s.lastName}`)}</div>
           <div class="text-xs text-slate-400">${DB.classSectionLabel(s.classId, s.sectionId)}</div>
