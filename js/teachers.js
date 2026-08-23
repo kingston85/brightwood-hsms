@@ -22,7 +22,7 @@ function renderTeachers() {
     <tr>
       <td>
         <div class="flex items-center gap-3">
-          <div class="w-9 h-9 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-bold">${initialsAvatar(t.firstName+' '+t.lastName)}</div>
+          ${avatarHTML(t.photoURL, t.firstName+' '+t.lastName, 'w-9 h-9', 'bg-emerald-100 text-emerald-700 text-xs')}
           <div>
             <div class="font-semibold">${esc(t.firstName)} ${esc(t.lastName)}</div>
             <div class="text-xs text-slate-400">${esc(t.staffNo)}</div>
@@ -35,6 +35,7 @@ function renderTeachers() {
       <td>${statusBadge(t.status)}</td>
       <td class="text-right space-x-1 no-print">
         <button class="btn btn-secondary btn-sm" onclick="editTeacher('${t.id}')">Edit</button>
+        <button class="btn btn-secondary btn-sm" onclick="openPhotoUploadModal('teachers','${t.id}', renderTeachers)">📷</button>
         <button class="btn btn-danger btn-sm" onclick="deleteTeacher('${t.id}')">Delete</button>
       </td>
     </tr>
