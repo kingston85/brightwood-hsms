@@ -31,7 +31,7 @@ const FIREBASE_CONFIG = {
 const FB_COLLECTIONS = [
   'subjects', 'teachers', 'classes', 'students', 'timetable', 'exams', 'grades', 'attendance', 'feeStructure', 'invoices',
   'announcements', 'assignments', 'behaviorLogs', 'books', 'loans', 'events', 'paymentSubmissions', 'messages',
-  'examSchedule', 'examSeating', 'submissions',
+  'examSchedule', 'examSeating', 'submissions', 'auditLog', 'staffAttendance', 'staffLeave',
 ];
 
 const FB = {
