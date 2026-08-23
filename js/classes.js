@@ -183,10 +183,12 @@ function openPromoteForm(fromClassId, fromSectionId) {
     const fd = Object.fromEntries(new FormData(e.target).entries());
     const students = DB.studentsInSection(fromSectionId);
     if (fd.action === 'graduate') {
-      students.forEach(s => { s.status = 'Graduated'; });
+      students.forEach(s => { s.status = 'Graduated'; s.graduationYear = DB.data.meta.currentYear; });
+      logAudit('Students graduated', `${students.length} student(s) — ${esc(fromClass?.name)} - ${esc(fromSection?.name)} — Class of ${DB.data.meta.currentYear}`);
     } else {
       if (!fd.toSectionId) { toast('Please choose a target section.'); return; }
       students.forEach(s => { s.classId = fd.toClassId; s.sectionId = fd.toSectionId; });
+      logAudit('Students promoted', `${students.length} student(s) — ${esc(fromClass?.name)} - ${esc(fromSection?.name)} → ${DB.classSectionLabel(fd.toClassId, fd.toSectionId)}`);
     }
     DB.save();
     closeModal();
@@ -268,13 +270,38 @@ function editTimetableCell(day, period) {
   document.getElementById('ttForm').onsubmit = (e) => {
     e.preventDefault();
     const fd = Object.fromEntries(new FormData(e.target).entries());
-    if (entry) {
-      DB.update('timetable', entry.id, fd);
+    const save = () => {
+      if (entry) {
+        DB.update('timetable', entry.id, fd);
+      } else {
+        DB.add('timetable', { sectionId: ClassesUI.sectionId, classId: DB.allSections().find(s=>s.sectionId===ClassesUI.sectionId)?.classId, day, period, ...fd });
+      }
+      closeModal(); toast('Timetable updated.'); renderClassesTabBody();
+    };
+    const conflict = teacherTimetableConflict(fd.teacherId, day, period, ClassesUI.sectionId, entry?.id);
+    if (conflict) {
+      const conflictSection = DB.allSections().find(s => s.sectionId === conflict.sectionId);
+      confirmAction(
+        `${DB.teacherName(fd.teacherId)} is already scheduled for ${conflictSection ? `${esc(conflictSection.className)} - ${esc(conflictSection.sectionName)}` : 'another section'} on ${day}, Period ${period}. Save this slot anyway (double-booking this teacher)?`,
+        save,
+        'Save Anyway'
+      );
     } else {
-      DB.add('timetable', { sectionId: ClassesUI.sectionId, classId: DB.allSections().find(s=>s.sectionId===ClassesUI.sectionId)?.classId, day, period, ...fd });
+      save();
     }
-    closeModal(); toast('Timetable updated.'); renderClassesTabBody();
   };
+}
+
+// Returns the conflicting timetable entry, if any, when the same teacher is
+// already assigned to a DIFFERENT section at the same day/period. Doesn't
+// hard-block — a school may occasionally want to double-book on purpose
+// (e.g. a shared/observed lesson) — it just makes sure that's a deliberate
+// choice rather than an accidental scheduling clash.
+function teacherTimetableConflict(teacherId, day, period, sectionId, excludeId) {
+  if (!teacherId) return null;
+  return DB.data.timetable.find(t =>
+    t.id !== excludeId && t.teacherId === teacherId && t.day === day && t.period === period && t.sectionId !== sectionId
+  );
 }
 function removeTimetableCell(id) {
   DB.remove('timetable', id);
