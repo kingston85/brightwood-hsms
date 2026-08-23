@@ -8,9 +8,9 @@
 canvas { max-width: 100%; }
 
 .role-tab.active-role {
-  background-color: #4f46e5;
+  background-color: var(--brand-primary, #4f46e5);
   color: #fff;
-  border-color: #4f46e5;
+  border-color: var(--brand-primary, #4f46e5);
 }
 
 #navList a {
@@ -101,8 +101,8 @@ table.data-table tbody tr:last-child td { border-bottom: none; }
   cursor: pointer;
   white-space: nowrap;
 }
-.btn-primary { background: #4f46e5; color: #fff; box-shadow: 0 1px 2px rgba(79,70,229,.25), 0 1px 8px rgba(79,70,229,.12); }
-.btn-primary:hover { background: #4338ca; }
+.btn-primary { background: var(--brand-primary, #4f46e5); color: #fff; box-shadow: 0 1px 2px rgba(79,70,229,.25), 0 1px 8px rgba(79,70,229,.12); }
+.btn-primary:hover { filter: brightness(0.92); }
 .btn-secondary { background: #f1f5f9; color: #1e293b; }
 .btn-secondary:hover { background: #e2e8f0; }
 .btn-danger { background: #fee2e2; color: #991b1b; }
@@ -157,3 +157,69 @@ table.data-table tbody tr:last-child td { border-bottom: none; }
    less like an abrupt content swap. */
 @keyframes view-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 .view-fade { animation: view-fade-in .18s ease; }
+
+/* ==========================================================================
+   Dark mode
+   Applied via [data-theme="dark"] on <html> (see js/theme.js), toggled from
+   the header and remembered per-browser. Rather than adding a dark: variant
+   to every single Tailwind utility class scattered across this app's JS
+   template strings (thousands of them), this overrides the small set of
+   color utilities actually reused everywhere — covers the vast majority of
+   the UI; a rarely-used one-off color combination may not be perfectly
+   inverted. Attribute-prefixed selectors here already out-specificity the
+   plain utility classes Tailwind generates, so no !important needed.
+   ========================================================================== */
+[data-theme="dark"] { color-scheme: dark; }
+[data-theme="dark"] body { background-color: #0b1220; color: #e2e8f0; }
+
+[data-theme="dark"] .bg-white,
+[data-theme="dark"] .card,
+[data-theme="dark"] .bg-slate-50 { background-color: #131c2e; }
+[data-theme="dark"] .bg-slate-100 { background-color: #1c2740; }
+[data-theme="dark"] .bg-slate-200 { background-color: #263252; }
+[data-theme="dark"] .bg-slate-500 { background-color: #64748b; }
+
+[data-theme="dark"] .text-ink-900,
+[data-theme="dark"] .text-slate-700,
+[data-theme="dark"] .text-slate-600 { color: #e2e8f0; }
+[data-theme="dark"] .text-slate-500,
+[data-theme="dark"] .text-slate-400,
+[data-theme="dark"] .text-slate-300 { color: #94a3b8; }
+
+[data-theme="dark"] .border-slate-100,
+[data-theme="dark"] .border-slate-200,
+[data-theme="dark"] .border-slate-300 { border-color: #2a3752; }
+
+[data-theme="dark"] .card { border-color: #24304a; box-shadow: 0 1px 2px rgba(0,0,0,.3), 0 1px 8px rgba(0,0,0,.2); }
+
+[data-theme="dark"] table.data-table thead th { background: #172038; color: #94a3b8; border-bottom-color: #2a3752; }
+[data-theme="dark"] table.data-table tbody td { border-bottom-color: #1c2740; }
+[data-theme="dark"] table.data-table tbody tr:hover { background: #172038; }
+
+[data-theme="dark"] .form-input,
+[data-theme="dark"] .form-select,
+[data-theme="dark"] .form-textarea { background: #0f1830; border-color: #2a3752; color: #e2e8f0; }
+[data-theme="dark"] .form-input::placeholder,
+[data-theme="dark"] .form-textarea::placeholder { color: #64748b; }
+
+[data-theme="dark"] .btn-secondary { background: #1c2740; color: #e2e8f0; }
+[data-theme="dark"] .btn-secondary:hover { background: #263252; }
+
+[data-theme="dark"] .tab-btn { color: #94a3b8; }
+[data-theme="dark"] .tab-btn:hover { background: #1c2740; }
+[data-theme="dark"] .tab-btn.active { background: #1e2a4a; color: #a5b4fc; }
+
+[data-theme="dark"] .bg-amber-50 { background: #2b2410; }
+[data-theme="dark"] .bg-red-50 { background: #2a1414; }
+[data-theme="dark"] .bg-emerald-50 { background: #0f2a1e; }
+[data-theme="dark"] .bg-brand-50 { background: #1a1a3a; }
+
+[data-theme="dark"] #backupReminderBanner .bg-amber-50 { background: #2b2410; }
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb { background: #2a3752; }
+
+/* The dark toggle button itself */
+#themeToggleBtn .icon-dark { display: none; }
+#themeToggleBtn .icon-light { display: inline; }
+[data-theme="dark"] #themeToggleBtn .icon-dark { display: inline; }
+[data-theme="dark"] #themeToggleBtn .icon-light { display: none; }
