@@ -141,9 +141,11 @@ function wireUserForm(existingId) {
       try {
         if (existingId) {
           await FB.updateUserProfile(existingId, { name: fd.name, role: fd.role, linkedId: fd.linkedId || null, assignedSectionIds });
+          logAudit('User account updated', `${fd.name} (${fd.role})`);
           toast('User updated.');
         } else {
           await FB.adminCreateAccount({ name: fd.name, email: fd.email, password: fd.password, role: fd.role, linkedId: fd.linkedId || null, assignedSectionIds });
+          logAudit('User account created', `${fd.name} (${fd.role}) — ${fd.email}`);
           toast('User added — they can sign in with the email and temporary password you set.');
         }
         closeModal(); renderUsers();
@@ -159,8 +161,8 @@ function wireUserForm(existingId) {
     // Local demo mode
     const dupe = DB.data.users.find(u => u.username.toLowerCase() === fd.username.toLowerCase() && u.id !== existingId);
     if (dupe) { toast('That username is already taken.'); return; }
-    if (existingId) { DB.update('users', existingId, fd); toast('User updated.'); }
-    else { DB.add('users', fd); toast('User added.'); }
+    if (existingId) { DB.update('users', existingId, fd); logAudit('User account updated', `${fd.name} (${fd.role})`); toast('User updated.'); }
+    else { DB.add('users', fd); logAudit('User account created', `${fd.name} (${fd.role})`); toast('User added.'); }
     closeModal(); renderUsers();
   };
 }
@@ -168,12 +170,14 @@ function wireUserForm(existingId) {
 function openUserForm() { openModal(userFormHTML(null)); wireUserForm(null); }
 function editUser(id) { openModal(userFormHTML(DB.find('users', id))); wireUserForm(id); }
 function deleteUser(id) {
+  const u = DB.find('users', id);
+  const label = u ? `${u.name} (${u.role})` : id;
   confirmAction('Remove this user account? They will no longer be able to sign in.', async () => {
     if (FB.active) {
-      try { await FB.deleteUserProfile(DB.find('users', id) || { id }); toast('User removed.'); renderUsers(); }
+      try { await FB.deleteUserProfile(u || { id }); logAudit('User account deleted', label); toast('User removed.'); renderUsers(); }
       catch (err) { console.error(err); toast('Could not remove user — see console.'); }
       return;
     }
-    DB.remove('users', id); toast('User removed.'); renderUsers();
+    DB.remove('users', id); logAudit('User account deleted', label); toast('User removed.'); renderUsers();
   });
 }
