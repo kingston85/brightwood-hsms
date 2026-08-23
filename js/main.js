@@ -6,7 +6,6 @@ document.addEventListener('DOMContentLoaded', () => {
   DB.load();
   I18N.init();
   wireThemeToggle();
-  wireLoginScreen();
   wireFirebaseLoginForm();
   initGoogleSignIn();
   Drive.init();
@@ -25,32 +24,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   wireShell();
 });
-
-function wireLoginScreen() {
-  document.querySelectorAll('.role-tab').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.role-tab').forEach(b => b.classList.remove('active-role'));
-      btn.classList.add('active-role');
-      Auth.selectedRole = btn.dataset.role;
-      document.getElementById('loginError').classList.add('hidden');
-    });
-  });
-
-  document.getElementById('loginForm').addEventListener('submit', (e) => {
-    e.preventDefault();
-    const username = document.getElementById('loginUsername').value;
-    const password = document.getElementById('loginPassword').value;
-    const result = Auth.login(username, password, Auth.selectedRole);
-    const errEl = document.getElementById('loginError');
-    if (!result.ok) {
-      errEl.textContent = result.error;
-      errEl.classList.remove('hidden');
-      return;
-    }
-    errEl.classList.add('hidden');
-    enterApp();
-  });
-}
 
 let fbSetupMode = false;
 
