@@ -327,6 +327,17 @@ rather than in separate cloud storage, it counts against Firestore's 1MiB
 per-document size limit — which is exactly why the app compresses fairly
 aggressively (480px, well under 400KB) before saving.
 
+### Login Page Background Photo (works with no extra setup)
+
+Admin-only, under **Backup & Sync → School Branding**: upload a real photo
+of your school and it shows as a faint watermark behind the entire login
+screen, before anyone signs in. Same no-setup embedded-photo trick as the
+school logo and profile photos above — no Firebase Storage, works in both
+Firebase-synced and pure local-storage mode. Click **Remove** to go back to
+a plain login screen. It's kept deliberately subtle (low opacity, resized
+and compressed to a small JPEG) so the sign-in form stays easy to read on
+top of it.
+
 ### Connecting Google Drive
 
 Google requires every app that uses Sign-In or Drive access to be
