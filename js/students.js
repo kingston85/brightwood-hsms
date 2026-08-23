@@ -328,9 +328,28 @@ function commitCSVImport() {
 
 function viewStudent(id) {
   const s = DB.find('students', id);
+  if (!s) { toast('That student record could not be found.', { type: 'error' }); return; }
   const rate = DB.attendanceRateFor(id);
   const avg = DB.studentAverage(id);
   const bal = DB.balanceFor(id);
+
+  // Quick links out to the rest of the app — gated to whichever tabs the
+  // current viewer actually has access to (this modal can be opened from
+  // Fees, Library, Behavior, Messages, Alumni, the QR scanner, and the
+  // Dashboard, not just the Students page, so it doubles as the student's
+  // hub). Each one closes this modal and jumps to the target tab already
+  // filtered/scoped to this student — see the goToStudent*() helpers in
+  // js/ui.js.
+  const links = [];
+  if (Auth.is('admin')) links.push(`<button class="btn btn-secondary btn-sm" onclick="closeModal(); goToStudentFees('${id}')">💵 Fees</button>`);
+  if (Auth.is('admin') || Auth.is('teacher')) {
+    links.push(`<button class="btn btn-secondary btn-sm" onclick="closeModal(); goToStudentAttendance('${id}')">📝 Attendance</button>`);
+    links.push(`<button class="btn btn-secondary btn-sm" onclick="closeModal(); goToStudentReportCard('${id}')">📚 Report Card</button>`);
+    links.push(`<button class="btn btn-secondary btn-sm" onclick="closeModal(); goToStudentBehavior('${id}')">🚦 Behavior Log</button>`);
+  }
+  if (Auth.is('admin')) links.push(`<button class="btn btn-secondary btn-sm" onclick="closeModal(); goToStudentLibrary('${id}')">📖 Library</button>`);
+  if (Auth.is('teacher')) links.push(`<button class="btn btn-secondary btn-sm" onclick="closeModal(); openMessageThreadForStudent('${id}')">💬 Message</button>`);
+
   openModal(`
     <div class="p-6">
       <div class="flex items-center gap-4 mb-5">
@@ -353,6 +372,7 @@ function viewStudent(id) {
         <div class="flex justify-between"><dt class="text-slate-400">Address</dt><dd>${esc(s.address) || '—'}</dd></div>
         <div class="flex justify-between"><dt class="text-slate-400">Admission Date</dt><dd>${esc(s.admissionDate) || '—'}</dd></div>
       </dl>
+      ${links.length ? `<div class="flex flex-wrap gap-2 pt-4 mt-4 border-t border-slate-100 no-print">${links.join('')}</div>` : ''}
       <div class="flex justify-end pt-5"><button class="btn btn-secondary" onclick="closeModal()">Close</button></div>
     </div>
   `);
