@@ -368,9 +368,15 @@ with no internet connection at all — this app already stores its data in
 local storage, so a school not using Firebase Sync can keep working
 entirely offline. Firebase Sync itself, naturally, still needs a real
 connection to actually sync; while offline it just resumes the moment the
-connection comes back. If you edit any of the app's own files after
-deploying, bump `CACHE_VERSION` at the top of `sw.js` so returning visitors
-pick up the change instead of a stale cached copy.
+connection comes back.
+
+The cache is only ever a fallback for when there's no network — every load
+with a connection always fetches the current files fresh, so deploying an
+update just works; nobody needs to clear anything on their end. If you ever
+change any of the app's own files, bump `CACHE_VERSION` at the top of
+`sw.js` too — it doesn't affect whether people see the update (they always
+do), it just makes sure the *previous* version's cached files actually get
+cleaned up instead of sitting there unused.
 
 ### WhatsApp
 
