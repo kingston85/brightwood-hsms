@@ -29,7 +29,7 @@ function renderCalendar() {
       <div class="card p-5 lg:col-span-2">
         <div class="flex items-center justify-between mb-4 no-print">
           <button class="btn btn-secondary btn-sm" onclick="shiftCalendarMonth(-1)">&larr; Prev</button>
-          <h3 class="font-bold text-lg">${monthName(CalendarUI.month)} ${CalendarUI.year}</h3>
+          <h3 id="calMonthLabel" class="font-bold text-lg">${monthName(CalendarUI.month)} ${CalendarUI.year}</h3>
           <button class="btn btn-secondary btn-sm" onclick="shiftCalendarMonth(1)">Next &rarr;</button>
         </div>
         <div id="calGrid"></div>
@@ -51,6 +51,8 @@ function shiftCalendarMonth(delta) {
   CalendarUI.month += delta;
   if (CalendarUI.month < 0) { CalendarUI.month = 11; CalendarUI.year--; }
   if (CalendarUI.month > 11) { CalendarUI.month = 0; CalendarUI.year++; }
+  const label = document.getElementById('calMonthLabel');
+  if (label) label.textContent = `${monthName(CalendarUI.month)} ${CalendarUI.year}`;
   renderCalGrid();
 }
 
