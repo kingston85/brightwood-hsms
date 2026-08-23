@@ -36,7 +36,7 @@ const PRECACHE_URLS = [
   'js/auditlog.js', 'js/auth.js', 'js/behavior.js', 'js/calendar.js', 'js/classes.js',
   'js/dashboard.js', 'js/data.js', 'js/drive.js', 'js/examSchedule.js', 'js/fees.js',
   'js/firebase-sync.js', 'js/grades.js', 'js/i18n.js', 'js/library.js', 'js/main.js', 'js/messages.js',
-  'js/notifications.js', 'js/pwa.js', 'js/push.js', 'js/qr.js', 'js/qrscan.js',
+  'js/notifications.js', 'js/photo.js', 'js/pwa.js', 'js/push.js', 'js/qr.js', 'js/qrscan.js',
   'js/settings.js', 'js/staff.js', 'js/stripe-pay.js', 'js/students.js',
   'js/subjects.js', 'js/teachers.js', 'js/theme.js', 'js/ui.js', 'js/users.js',
   'assets/icons/icon-192.png', 'assets/icons/icon-512.png',
