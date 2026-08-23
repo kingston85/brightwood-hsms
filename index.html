@@ -83,43 +83,20 @@
         <span class="font-semibold text-lg">Brightwood HSMS</span>
       </div>
       <h2 data-i18n="login.signInHeading" class="text-xl font-bold mb-1">Sign in to your account</h2>
-      <p data-i18n="login.signInSub" class="text-sm text-slate-500 mb-6">Choose your role and enter your credentials.</p>
+      <p data-i18n="login.signInSub" class="text-sm text-slate-500 mb-6">Sign in with your school Google account, or your Firebase email and password.</p>
 
-      <div id="roleTabs" class="grid grid-cols-3 gap-2 mb-5 text-sm font-medium">
-        <button data-role="admin" data-i18n="login.roleAdmin" class="role-tab active-role py-2 rounded-lg border border-slate-200">Admin</button>
-        <button data-role="teacher" data-i18n="login.roleTeacher" class="role-tab py-2 rounded-lg border border-slate-200">Teacher</button>
-        <button data-role="student" data-i18n="login.roleStudent" class="role-tab py-2 rounded-lg border border-slate-200">Student / Parent</button>
-      </div>
+      <p id="loginError" class="text-sm text-red-600 hidden mb-3"></p>
 
-      <form id="loginForm" class="space-y-4">
-        <div>
-          <label data-i18n="login.usernameLabel" class="block text-xs font-semibold text-slate-600 mb-1">Username or Email</label>
-          <input id="loginUsername" type="text" required class="w-full px-3 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500" placeholder="e.g. admin" />
-        </div>
-        <div>
-          <label data-i18n="login.passwordLabel" class="block text-xs font-semibold text-slate-600 mb-1">PIN / Password</label>
-          <input id="loginPassword" type="password" required class="w-full px-3 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500" placeholder="••••••••" />
-        </div>
-        <p id="loginError" class="text-sm text-red-600 hidden"></p>
-        <button type="submit" data-i18n="login.signInBtn" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2.5 rounded-lg transition">Sign In</button>
-      </form>
-
-      <div class="my-5 flex items-center gap-3 text-xs text-slate-400">
-        <div class="h-px bg-slate-200 flex-1"></div> OR <div class="h-px bg-slate-200 flex-1"></div>
-      </div>
       <div id="googleSignInBtn" class="flex justify-center">
         <p class="text-xs text-slate-400 text-center px-4">Google Sign-In available once an OAuth Client ID is configured — see README.md.</p>
       </div>
 
-      <div class="mt-6 bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-500 leading-relaxed">
-        <strong data-i18n="login.demoTitle" class="text-slate-700">Demo accounts</strong> <span data-i18n="login.demoDeviceNote" class="text-slate-400">(local, this device only)</span><br/>
-        Admin &mdash; <code>admin / admin123</code><br/>
-        Teacher &mdash; <code>jbrown / teach123</code><br/>
-        Student/Parent &mdash; <code>student1 / stud123</code>
+      <div class="my-5 flex items-center gap-3 text-xs text-slate-400">
+        <div class="h-px bg-slate-200 flex-1"></div> OR <div class="h-px bg-slate-200 flex-1"></div>
       </div>
 
-      <div class="mt-6 pt-5 border-t border-slate-200">
-        <p class="text-xs font-semibold text-slate-600 mb-2"><span data-i18n="login.firebaseSectionTitle">Shared Firebase Account</span> <span data-i18n="login.firebaseSectionNote" class="font-normal text-slate-400">(live, multi-device data)</span></p>
+      <div>
+        <p class="text-xs font-semibold text-slate-600 mb-2"><span data-i18n="login.firebaseSectionTitle">Sign in with Email</span> <span data-i18n="login.firebaseSectionNote" class="font-normal text-slate-400">(Firebase account)</span></p>
         <div id="firebaseNotConfigured" class="text-xs text-slate-400">Firebase sync isn’t configured yet — see README.md → "Firebase Setup".</div>
         <form id="firebaseForm" class="hidden space-y-2">
           <input id="fbEmail" type="email" placeholder="Email" class="form-input" autocomplete="username" />
