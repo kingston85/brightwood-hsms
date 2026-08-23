@@ -2,7 +2,7 @@
    Brightwood HSMS — Students module
    ========================================================================== */
 
-const StudentsUI = { search: '', classId: '', sectionId: '' };
+const StudentsUI = { search: '', classId: '', sectionId: '', showGraduated: false };
 
 function scopedStudents() {
   let list = DB.data.students.slice();
@@ -10,6 +10,10 @@ function scopedStudents() {
     const secIds = Auth.teacherSections(Auth.currentUser.linkedId);
     list = list.filter(s => secIds.includes(s.sectionId));
   }
+  // Graduated students have their own home (Alumni) — keep the active
+  // roster focused on current students by default, with an explicit
+  // checkbox to bring them back into view when needed.
+  if (!StudentsUI.showGraduated) list = list.filter(s => s.status !== 'Graduated');
   if (StudentsUI.classId) list = list.filter(s => s.classId === StudentsUI.classId);
   if (StudentsUI.sectionId) list = list.filter(s => s.sectionId === StudentsUI.sectionId);
   if (StudentsUI.search) {
@@ -59,6 +63,7 @@ function renderStudents() {
           <option value="">All Sections</option>
           ${StudentsUI.classId ? sectionOptions(StudentsUI.classId, StudentsUI.sectionId) : ''}
         </select>
+        <label class="flex items-center gap-1.5 text-xs text-slate-500"><input id="stuShowGraduated" type="checkbox" ${StudentsUI.showGraduated ? 'checked' : ''}/> Include graduated</label>
       </div>
       <div class="flex flex-wrap gap-2">
         <button class="btn btn-secondary" onclick="window.print()">🖨️ Print Class List</button>
@@ -82,6 +87,7 @@ function renderStudents() {
   document.getElementById('stuClassFilter').value = StudentsUI.classId;
   document.getElementById('stuClassFilter').onchange = (e) => { StudentsUI.classId = e.target.value; StudentsUI.sectionId=''; renderStudents(); };
   document.getElementById('stuSectionFilter').onchange = (e) => { StudentsUI.sectionId = e.target.value; renderStudents(); };
+  document.getElementById('stuShowGraduated').onchange = (e) => { StudentsUI.showGraduated = e.target.checked; renderStudents(); };
 }
 
 function studentFormHTML(s) {
@@ -160,12 +166,15 @@ function editStudent(id) {
   wireStudentForm(id);
 }
 function deleteStudent(id) {
+  const s = DB.find('students', id);
+  const label = s ? `${s.firstName} ${s.lastName} (${s.admissionNo})` : id;
   confirmAction('This will permanently remove the student and cannot be undone.', () => {
     DB.remove('students', id);
     DB.data.attendance = DB.data.attendance.filter(a => a.studentId !== id);
     DB.data.grades = DB.data.grades.filter(g => g.studentId !== id);
     DB.data.invoices = DB.data.invoices.filter(i => i.studentId !== id);
     DB.save();
+    logAudit('Student deleted', label);
     toast('Student removed.');
     renderStudents();
   });
@@ -177,12 +186,14 @@ function printIDCards() {
   const list = scopedStudents();
   const cards = list.map(s => `
     <div class="card p-4 flex flex-col items-center text-center border-2 border-brand-100" style="width:260px;">
+      ${brandLogoImgHTML('h-8 mb-1')}
       <div class="text-[10px] font-bold text-brand-700 uppercase tracking-wide">${esc(DB.data.meta.schoolName)}</div>
       <div class="w-16 h-16 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xl font-bold my-2">${initialsAvatar(s.firstName + ' ' + s.lastName)}</div>
       <div class="font-bold">${esc(s.firstName)} ${esc(s.lastName)}</div>
       <div class="text-xs text-slate-500">${DB.classSectionLabel(s.classId, s.sectionId)}</div>
       <div class="text-xs text-slate-400 mt-1">${esc(s.admissionNo)}</div>
-      <div class="text-[10px] text-slate-400 mt-2 border-t border-slate-200 pt-1 w-full">${esc(DB.data.meta.currentTerm)} ${esc(DB.data.meta.currentYear)} &middot; Student ID</div>
+      <div class="qr-slot my-2" data-qr="${esc(qrStudentPayload(s.id))}" data-qr-width="90"></div>
+      <div class="text-[10px] text-slate-400 mt-1 border-t border-slate-200 pt-1 w-full">${esc(DB.data.meta.currentTerm)} ${esc(DB.data.meta.currentYear)} &middot; Student ID</div>
     </div>
   `).join('') || `<p class="text-slate-400">No students to print.</p>`;
 
@@ -193,6 +204,7 @@ function printIDCards() {
     </div>
     <div class="flex flex-wrap gap-4">${cards}</div>
   `;
+  renderAllQrSlots();
 }
 
 /* ------------------------------ Bulk CSV Import ------------------------------ */
@@ -337,7 +349,7 @@ function viewStudent(id) {
         <div class="flex justify-between"><dt class="text-slate-400">Gender</dt><dd>${esc(s.gender)}</dd></div>
         <div class="flex justify-between"><dt class="text-slate-400">Date of Birth</dt><dd>${esc(s.dob) || '—'}</dd></div>
         <div class="flex justify-between"><dt class="text-slate-400">Guardian</dt><dd>${esc(s.guardianName) || '—'}</dd></div>
-        <div class="flex justify-between"><dt class="text-slate-400">Guardian Phone</dt><dd>${esc(s.guardianPhone) || '—'}</dd></div>
+        <div class="flex justify-between items-center"><dt class="text-slate-400">Guardian Phone</dt><dd class="flex items-center gap-2">${esc(s.guardianPhone) || '—'} ${whatsappBtnHTML(s.guardianPhone, `Hello ${s.guardianName || ''}, this is ${DB.data.meta.schoolName} regarding ${s.firstName} ${s.lastName}.`)}</dd></div>
         <div class="flex justify-between"><dt class="text-slate-400">Address</dt><dd>${esc(s.address) || '—'}</dd></div>
         <div class="flex justify-between"><dt class="text-slate-400">Admission Date</dt><dd>${esc(s.admissionDate) || '—'}</dd></div>
       </dl>
