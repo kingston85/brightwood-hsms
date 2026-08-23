@@ -32,7 +32,7 @@ function renderStudents() {
     <tr>
       <td>
         <div class="flex items-center gap-3">
-          <div class="w-9 h-9 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xs font-bold">${initialsAvatar(s.firstName + ' ' + s.lastName)}</div>
+          ${avatarHTML(s.photoURL, s.firstName + ' ' + s.lastName, 'w-9 h-9', 'bg-brand-100 text-brand-700 text-xs')}
           <div>
             <div class="font-semibold text-ink-900">${esc(s.firstName)} ${esc(s.lastName)}</div>
             <div class="text-xs text-slate-400">${esc(s.admissionNo)}</div>
@@ -46,6 +46,7 @@ function renderStudents() {
       <td class="text-right space-x-1 no-print">
         <button class="btn btn-secondary btn-sm" onclick="viewStudent('${s.id}')">View</button>
         ${canEdit ? `<button class="btn btn-secondary btn-sm" onclick="editStudent('${s.id}')">Edit</button>` : ''}
+        ${Auth.is('admin') ? `<button class="btn btn-secondary btn-sm" onclick="openPhotoUploadModal('students','${s.id}', renderStudents)">📷</button>` : ''}
         ${canDelete ? `<button class="btn btn-danger btn-sm" onclick="deleteStudent('${s.id}')">Delete</button>` : ''}
       </td>
     </tr>
@@ -188,7 +189,7 @@ function printIDCards() {
     <div class="card p-4 flex flex-col items-center text-center border-2 border-brand-100" style="width:260px;">
       ${brandLogoImgHTML('h-8 mb-1')}
       <div class="text-[10px] font-bold text-brand-700 uppercase tracking-wide">${esc(DB.data.meta.schoolName)}</div>
-      <div class="w-16 h-16 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xl font-bold my-2">${initialsAvatar(s.firstName + ' ' + s.lastName)}</div>
+      <div class="my-2">${avatarHTML(s.photoURL, s.firstName + ' ' + s.lastName, 'w-16 h-16', 'bg-brand-100 text-brand-700 text-xl')}</div>
       <div class="font-bold">${esc(s.firstName)} ${esc(s.lastName)}</div>
       <div class="text-xs text-slate-500">${DB.classSectionLabel(s.classId, s.sectionId)}</div>
       <div class="text-xs text-slate-400 mt-1">${esc(s.admissionNo)}</div>
@@ -349,11 +350,12 @@ function viewStudent(id) {
   }
   if (Auth.is('admin')) links.push(`<button class="btn btn-secondary btn-sm" onclick="closeModal(); goToStudentLibrary('${id}')">📖 Library</button>`);
   if (Auth.is('teacher')) links.push(`<button class="btn btn-secondary btn-sm" onclick="closeModal(); openMessageThreadForStudent('${id}')">💬 Message</button>`);
+  if (Auth.is('admin')) links.push(`<button class="btn btn-secondary btn-sm" onclick="openPhotoUploadModal('students','${id}', () => viewStudent('${id}'))">📷 Change Photo</button>`);
 
   openModal(`
     <div class="p-6">
       <div class="flex items-center gap-4 mb-5">
-        <div class="w-16 h-16 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xl font-bold">${initialsAvatar(s.firstName+' '+s.lastName)}</div>
+        ${avatarHTML(s.photoURL, s.firstName+' '+s.lastName, 'w-16 h-16', 'bg-brand-100 text-brand-700 text-xl')}
         <div>
           <h3 class="font-bold text-lg">${esc(s.firstName)} ${esc(s.lastName)}</h3>
           <p class="text-sm text-slate-500">${DB.classSectionLabel(s.classId, s.sectionId)} &middot; ${esc(s.admissionNo)}</p>
