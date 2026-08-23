@@ -28,9 +28,11 @@
    ========================================================================== */
 
 const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https');
+const { onDocumentCreated } = require('firebase-functions/v2/firestore');
 const { defineSecret, defineString } = require('firebase-functions/params');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+const { getMessaging } = require('firebase-admin/messaging');
 const Stripe = require('stripe');
 
 initializeApp();
@@ -169,3 +171,48 @@ exports.stripeWebhook = onRequest(
     res.json({ received: true });
   }
 );
+
+/* ==========================================================================
+   Push notifications (Firebase Cloud Messaging)
+
+   Rides on the SAME `mail` documents js/firebase-sync.js's queueEmail()
+   already writes for every notification event (new message, homework
+   reviewed, payment confirmed/rejected, fee overdue) — one write from the
+   client, two delivery channels from the backend. The official "Trigger
+   Email from Firestore" Extension handles the email half; this function
+   handles the push half by looking up each recipient's stored FCM token
+   (see js/push.js — saved to their own pushTokens/{uid} doc when they
+   grant notification permission) and sending to it directly.
+
+   Requires: this function deployed (`firebase deploy --only functions`,
+   same as the Stripe backend above — no separate setup), and each user's
+   browser to have granted notification permission at least once (js/push.js
+   asks, once, in Settings — see README.md "Push Notifications").
+   A recipient who's never granted permission simply has no token on file,
+   so they're silently skipped here — the email side still reaches them.
+   ========================================================================== */
+exports.sendPushOnMail = onDocumentCreated('mail/{mailId}', async (event) => {
+  const mail = event.data.data();
+  const recipients = Array.isArray(mail.to) ? mail.to : [mail.to];
+  const subject = (mail.message && mail.message.subject) || 'Brightwood HSMS';
+  const bodyText = (mail.message && (mail.message.text || mail.message.html)) || '';
+
+  for (const email of recipients.filter(Boolean)) {
+    try {
+      const snap = await db.collection('pushTokens').where('email', '==', email).limit(1).get();
+      if (snap.empty) continue;
+      const token = snap.docs[0].data().token;
+      if (!token) continue;
+      await getMessaging().send({
+        token,
+        notification: { title: subject, body: bodyText.slice(0, 200) },
+        webpush: { fcmOptions: { link: APP_URL.value() } },
+      });
+    } catch (e) {
+      // A single stale/invalid token shouldn't stop the rest of the batch —
+      // and this function's whole job is best-effort on top of email, which
+      // always still goes out regardless.
+      console.error('Push send failed for', email, e.message || e);
+    }
+  }
+});
