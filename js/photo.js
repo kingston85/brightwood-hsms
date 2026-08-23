@@ -127,9 +127,18 @@ function openPhotoUploadModal(kind, id, onDone) {
   };
 
   document.getElementById('photoSaveBtn').onclick = async () => {
-    if (!pendingFile) return;
     const status = document.getElementById('photoUploadStatus');
     const saveBtn = document.getElementById('photoSaveBtn');
+    // Defense in depth: the Save button is only meant to be enabled once a
+    // file is picked, but if that ever gets out of sync (e.g. a stale
+    // cached copy of this file with different wiring), fail LOUDLY instead
+    // of silently doing nothing — that's what made this hard to diagnose
+    // last time.
+    if (!pendingFile) {
+      status.textContent = 'Please choose a photo first.';
+      status.className = 'text-xs text-red-600';
+      return;
+    }
     status.textContent = 'Uploading…';
     status.className = 'text-xs text-slate-400';
     saveBtn.disabled = true;
@@ -139,6 +148,7 @@ function openPhotoUploadModal(kind, id, onDone) {
       toast('Photo updated.', { type: 'success' });
       if (onDone) onDone();
     } catch (e) {
+      console.error('Photo upload failed:', e);
       status.textContent = (e && e.message) || 'Could not upload that photo — please try again.';
       status.className = 'text-xs text-red-600';
       saveBtn.disabled = false;
