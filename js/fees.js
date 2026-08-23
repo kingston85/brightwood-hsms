@@ -178,7 +178,7 @@ function invoicesHTML() {
 
   const rows = list.map(i => `
     <tr>
-      <td>${DB.studentName(i.studentId)}</td>
+      <td>${studentLinkHTML(i.studentId)}</td>
       <td>${esc(i.label)}</td>
       <td>${esc(i.term)} ${esc(i.year)}</td>
       <td>${money(i.amount)}</td>
@@ -430,7 +430,7 @@ function verificationQueueHTML() {
     const inv = DB.find('invoices', p.invoiceId);
     return `
     <tr class="${p.status==='Pending' ? 'bg-amber-50' : ''}">
-      <td>${DB.studentName(p.studentId)}</td>
+      <td>${studentLinkHTML(p.studentId)}</td>
       <td>${inv ? esc(inv.label) + ' — ' + esc(inv.term) + ' ' + esc(inv.year) : '<span class="text-slate-400">Invoice deleted</span>'}</td>
       <td>${esc(p.method)}</td>
       <td>${money(p.amount)}</td>
