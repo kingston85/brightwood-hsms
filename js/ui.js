@@ -193,6 +193,62 @@ function whatsappBtnHTML(phone, message, label) {
   return `<a href="${link}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm no-print">💬 ${esc(label || 'WhatsApp')}</a>`;
 }
 
+/* ------------------------------ Cross-module links ------------------------------
+   A student (or a class/section) shouldn't be a dead end wherever it shows
+   up outside its own module — Fees, Library, Behavior, Messages, Alumni,
+   the QR scanner, and the Dashboard all use these to jump straight to the
+   right place, pre-filtered to that student/section, instead of leaving
+   someone to go search for the same person again by hand. */
+
+// A clickable student name — opens the same profile modal as the Students
+// page, from anywhere (viewStudent() just opens a modal; it doesn't care
+// which page is on screen, so this is safe to use everywhere).
+function studentLinkHTML(id, label) {
+  const name = label || DB.studentName(id);
+  if (!id || !DB.find('students', id)) return esc(name);
+  return `<a href="#" class="text-brand-600 hover:underline" onclick="event.preventDefault(); viewStudent('${id}')">${esc(name)}</a>`;
+}
+
+function goToStudentFees(studentId) {
+  if (typeof FeesUI !== 'undefined') { FeesUI.tab = 'invoices'; FeesUI.search = DB.studentName(studentId); FeesUI.classId = ''; FeesUI.status = ''; }
+  navigate('fees');
+}
+function goToStudentAttendance(studentId) {
+  const s = DB.find('students', studentId);
+  if (typeof AttendanceUI !== 'undefined' && s) { AttendanceUI.tab = 'report'; AttendanceUI.sectionId = s.sectionId; }
+  navigate('attendance');
+}
+function goToStudentReportCard(studentId) {
+  if (typeof GradesUI !== 'undefined') { GradesUI.tab = 'report'; GradesUI.reportStudentId = studentId; }
+  navigate('grades');
+}
+// Only admin can see the Library module's Loans tab (see js/library.js) —
+// this jumps there with the list pre-filtered to one student.
+function goToStudentLibrary(studentId) {
+  if (typeof LibraryUI !== 'undefined') { LibraryUI.tab = 'loans'; LibraryUI.studentFilter = studentId; }
+  navigate('library');
+}
+function goToStudentBehavior(studentId) {
+  const s = DB.find('students', studentId);
+  if (typeof BehaviorUI !== 'undefined' && s) { BehaviorUI.sectionId = s.sectionId; BehaviorUI.search = DB.studentName(studentId); }
+  navigate('behavior');
+}
+
+// Section-level equivalents — used by Classes & Timetable and the
+// Dashboard's class/section tables.
+function goToSectionStudents(classId, sectionId) {
+  if (typeof StudentsUI !== 'undefined') { StudentsUI.classId = classId; StudentsUI.sectionId = sectionId; StudentsUI.search = ''; StudentsUI.showGraduated = false; }
+  navigate('students');
+}
+function goToSectionAttendance(sectionId) {
+  if (typeof AttendanceUI !== 'undefined') { AttendanceUI.tab = 'mark'; AttendanceUI.sectionId = sectionId; }
+  navigate('attendance');
+}
+function goToSectionTimetable(sectionId) {
+  if (typeof ClassesUI !== 'undefined') { ClassesUI.tab = 'timetable'; ClassesUI.sectionId = sectionId; }
+  navigate('classes');
+}
+
 /* ------------------------------ Audit log ------------------------------
    A lightweight accountability trail for the highest-value actions in a
    school with more than one admin/teacher touching the data: account
