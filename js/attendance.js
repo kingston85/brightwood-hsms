@@ -60,7 +60,10 @@ function markAttendanceHTML() {
           ${sections.map(s => `<option value="${s.sectionId}" ${s.sectionId===AttendanceUI.sectionId?'selected':''}>${esc(s.className)} - ${esc(s.sectionName)}</option>`).join('')}
         </select>
       </div>
-      <button class="btn btn-primary" onclick="saveAttendance()">Save Attendance</button>
+      <div class="flex gap-2 no-print">
+        <button class="btn btn-secondary" onclick="goToQrScan('attendance')">📷 Scan to Mark</button>
+        <button class="btn btn-primary" onclick="saveAttendance()">Save Attendance</button>
+      </div>
     </div>
     <div class="card overflow-x-auto">
       <table class="data-table"><thead><tr><th>Student</th><th>Status</th></tr></thead><tbody id="attRows">${rows}</tbody></table>
