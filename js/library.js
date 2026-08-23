@@ -5,7 +5,7 @@
    loan history, with overdue items flagged.
    ========================================================================== */
 
-const LibraryUI = { tab: 'catalog', search: '' };
+const LibraryUI = { tab: 'catalog', search: '', studentFilter: null };
 
 function bookAvailable(bookId) {
   const book = DB.find('books', bookId);
@@ -76,11 +76,13 @@ function catalogHTML() {
 }
 
 function loansHTML() {
-  const list = DB.data.loans.slice().sort((a, b) => b.checkoutDate.localeCompare(a.checkoutDate));
+  let list = DB.data.loans.slice();
+  if (LibraryUI.studentFilter) list = list.filter(l => l.studentId === LibraryUI.studentFilter);
+  list = list.sort((a, b) => b.checkoutDate.localeCompare(a.checkoutDate));
   const rows = list.map(l => `
     <tr class="${loanStatus(l)==='Overdue' ? 'bg-red-50' : ''}">
       <td>${DB.find('books', l.bookId)?.title || '—'}</td>
-      <td>${DB.studentName(l.studentId)}</td>
+      <td>${studentLinkHTML(l.studentId)}</td>
       <td>${esc(l.checkoutDate)}</td>
       <td>${esc(l.dueDate)}</td>
       <td>${badge(loanStatus(l), loanStatus(l)==='Overdue' ? 'red' : loanStatus(l)==='Returned' ? 'green' : 'amber')}</td>
@@ -89,15 +91,20 @@ function loansHTML() {
   `).join('') || `<tr><td colspan="6" class="text-center text-slate-400 py-10">No loans recorded yet.</td></tr>`;
 
   return `
-    <div class="flex justify-end gap-2 no-print">
-      <button class="btn btn-secondary" onclick="goToQrScan('library')">📷 Scan to Check Out/Return</button>
-      <button class="btn btn-primary" onclick="openCheckoutForm()">+ Check Out Book</button>
+    <div class="flex flex-wrap items-center justify-between gap-2 no-print">
+      ${LibraryUI.studentFilter ? `<div class="text-sm text-slate-500">Filtering to <strong>${esc(DB.studentName(LibraryUI.studentFilter))}</strong> <button class="text-brand-600 hover:underline ml-1" onclick="clearLibraryStudentFilter()">Clear ✕</button></div>` : '<div></div>'}
+      <div class="flex gap-2">
+        <button class="btn btn-secondary" onclick="goToQrScan('library')">📷 Scan to Check Out/Return</button>
+        <button class="btn btn-primary" onclick="openCheckoutForm()">+ Check Out Book</button>
+      </div>
     </div>
     <div class="card overflow-x-auto">
       <table class="data-table"><thead><tr><th>Book</th><th>Student</th><th>Checked Out</th><th>Due</th><th>Status</th><th class="no-print"></th></tr></thead><tbody>${rows}</tbody></table>
     </div>
   `;
 }
+
+function clearLibraryStudentFilter() { LibraryUI.studentFilter = null; renderLibraryTabBody(); }
 
 function wireLibraryControls() {
   const s = document.getElementById('libSearch');
