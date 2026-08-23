@@ -162,10 +162,11 @@ function renderThreadPane(thread) {
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
       </button>
       <div class="w-9 h-9 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xs font-bold">${initialsAvatar(thread.name)}</div>
-      <div>
+      <div class="flex-1 min-w-0">
         <div class="font-semibold text-sm">${esc(thread.name)}</div>
         ${thread.studentName ? `<div class="text-xs text-slate-400">Regarding ${esc(thread.studentName)}</div>` : ''}
       </div>
+      ${Auth.is('teacher') && thread.studentId ? whatsappBtnHTML(DB.find('students', thread.studentId)?.guardianPhone, `Hello, this is ${Auth.currentUser.name} from ${DB.data.meta.schoolName} regarding ${thread.studentName}.`) : ''}
     </div>
     <div id="msgScroll" class="flex-1 overflow-y-auto p-4 space-y-3">${bubbles}</div>
     <form id="msgSendForm" class="border-t border-slate-200 p-3 flex gap-2 shrink-0">
