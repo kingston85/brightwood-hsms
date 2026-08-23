@@ -110,6 +110,16 @@ function toggleNotifDropdown() {
   });
   dd.querySelectorAll('.notifItemBtn').forEach((btn) => {
     btn.addEventListener('click', () => {
+      // Clicking any single notification means "I've seen these" just as
+      // much as the explicit Mark all read button does — advance the same
+      // cursor so the badge/highlight clear immediately instead of only
+      // reacting to that one dedicated button. Sticky items (pending
+      // payments, unread messages, upcoming fees) are unaffected — they're
+      // excluded from the cursor check on purpose, since they represent an
+      // ongoing state rather than a one-time "new since last visit" event,
+      // and should keep showing until the underlying thing is resolved.
+      notifMarkSeenNow();
+      renderNotifBell();
       dd.classList.add('hidden');
       navigate(btn.dataset.route);
     });
