@@ -8,16 +8,23 @@ const ICONS = {
   attendance: '📝', grades: '📚', fees: '💵', users: '👤', settings: '⚙️',
   reportcard: '📄', announcements: '📢', assignments: '🧾', library: '📖',
   calendar: '📅', behavior: '🚦', subjects: '📘', messages: '💬', examSchedule: '📋',
+  alumni: '🏅', auditLog: '🕵️', staff: '🗂️', qrscan: '📷',
 };
 
 /* ------------------------------- Toast ----------------------------------- */
+// opts: { type: 'info'|'success'|'error', duration: ms } — type controls color,
+// duration how long it stays up (errors default longer since there's more to read).
 let toastTimer = null;
-function toast(msg) {
+function toast(msg, opts) {
+  opts = opts || {};
   const el = document.getElementById('toast');
   el.textContent = msg;
-  el.classList.remove('hidden');
+  const colorClass = opts.type === 'error' ? 'bg-red-600 text-white'
+    : opts.type === 'success' ? 'bg-emerald-600 text-white'
+    : 'bg-ink-900 text-white';
+  el.className = `fixed bottom-5 right-5 z-50 text-sm px-4 py-3 rounded-lg shadow-lg max-w-sm leading-snug ${colorClass}`;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.add('hidden'), 3200);
+  toastTimer = setTimeout(() => el.classList.add('hidden'), opts.duration || 3200);
 }
 
 /* ------------------------------- Modal ------------------------------------ */
@@ -70,10 +77,13 @@ const ROUTES = [
   { id: 'announcements', label: 'Announcements', icon: ICONS.announcements, roles: ['admin','teacher','student'], render: 'renderAnnouncements', section: null },
   { id: 'messages', label: 'Messages', icon: ICONS.messages, roles: ['teacher','student'], render: 'renderMessages', section: null },
   { id: 'students', label: 'Students', icon: ICONS.students, roles: ['admin','teacher'], render: 'renderStudents', section: 'Academics' },
+  { id: 'alumni', label: 'Alumni', icon: ICONS.alumni, roles: ['admin','teacher'], render: 'renderAlumni', section: 'Academics' },
   { id: 'teachers', label: 'Teachers', icon: ICONS.teachers, roles: ['admin'], render: 'renderTeachers', section: 'Academics' },
+  { id: 'staff', label: 'Staff Attendance & Leave', icon: ICONS.staff, roles: ['admin','teacher'], render: 'renderStaff', section: 'Academics' },
   { id: 'subjects', label: 'Subjects', icon: ICONS.subjects, roles: ['admin'], render: 'renderSubjects', section: 'Academics' },
   { id: 'classes', label: 'Classes & Timetable', icon: ICONS.classes, roles: ['admin','teacher','student'], render: 'renderClasses', section: 'Academics' },
   { id: 'attendance', label: 'Attendance', icon: ICONS.attendance, roles: ['admin','teacher','student'], render: 'renderAttendance', section: 'Academics' },
+  { id: 'qrscan', label: 'QR Scanner', icon: ICONS.qrscan, roles: ['admin','teacher'], render: 'renderQrScan', section: 'Academics' },
   { id: 'grades', label: 'Gradebook & Report Cards', icon: ICONS.grades, roles: ['admin','teacher','student'], render: 'renderGrades', section: 'Academics' },
   { id: 'examSchedule', label: 'Exam Timetable', icon: ICONS.examSchedule, roles: ['admin','teacher','student'], render: 'renderExamSchedule', section: 'Academics' },
   { id: 'assignments', label: 'Assignments', icon: ICONS.assignments, roles: ['admin','teacher','student'], render: 'renderAssignments', section: 'Academics' },
@@ -83,6 +93,7 @@ const ROUTES = [
   { id: 'fees', label: 'Finance & Fees', icon: ICONS.fees, roles: ['admin','student'], render: 'renderFees', section: 'Finance' },
   { id: 'users', label: 'User Accounts', icon: ICONS.users, roles: ['admin'], render: 'renderUsers', section: 'Administration' },
   { id: 'settings', label: 'Backup & Sync', icon: ICONS.settings, roles: ['admin'], render: 'renderSettings', section: 'Administration' },
+  { id: 'auditLog', label: 'Audit Log', icon: ICONS.auditLog, roles: ['admin'], render: 'renderAuditLog', section: 'Administration' },
 ];
 
 let currentRoute = 'dashboard';
@@ -94,14 +105,14 @@ function renderNav() {
   let lastSection = '__none__';
   ROUTES.filter(r => r.roles.includes(role)).forEach(r => {
     if (r.section && r.section !== lastSection) {
-      html += `<div class="nav-section-label">${r.section}</div>`;
+      html += `<div class="nav-section-label">${I18N.t('section.' + r.section, r.section)}</div>`;
       lastSection = r.section;
     } else if (!r.section && lastSection !== '__none__' && lastSection !== null) {
       lastSection = null;
     }
     const navBadge = r.id === 'fees' && role === 'admin' ? DB.data.paymentSubmissions.filter(p => p.status === 'Pending').length
       : r.id === 'messages' ? unreadMessageCount() : 0;
-    html += `<a data-route="${r.id}" class="${r.id === currentRoute ? 'active' : ''} flex items-center justify-between"><span class="flex items-center gap-2"><span class="nav-icon">${r.icon}</span> ${r.label}</span>${navBadge ? `<span class="bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center shrink-0">${navBadge}</span>` : ''}</a>`;
+    html += `<a data-route="${r.id}" class="${r.id === currentRoute ? 'active' : ''} flex items-center justify-between"><span class="flex items-center gap-2"><span class="nav-icon">${r.icon}</span> ${I18N.t('nav.' + r.id, r.label)}</span>${navBadge ? `<span class="bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center shrink-0">${navBadge}</span>` : ''}</a>`;
   });
   nav.innerHTML = html;
   nav.querySelectorAll('a[data-route]').forEach(a => {
@@ -113,8 +124,12 @@ function navigate(routeId) {
   const role = Auth.currentUser.role;
   const route = ROUTES.find(r => r.id === routeId && r.roles.includes(role));
   if (!route) return;
+  // Turn the camera off when leaving the QR Scanner page — otherwise the
+  // MediaStream keeps running (and the camera light stays on) even though
+  // its <video> element was just replaced by the next page's content.
+  if (currentRoute === 'qrscan' && routeId !== 'qrscan' && typeof stopQrScan === 'function') stopQrScan();
   currentRoute = routeId;
-  document.getElementById('pageTitle').textContent = route.label;
+  document.getElementById('pageTitle').textContent = I18N.t('nav.' + route.id, route.label);
   document.querySelectorAll('#navList a').forEach(a => a.classList.toggle('active', a.dataset.route === routeId));
   window[route.render]();
   const mc = document.getElementById('mainContent');
@@ -149,6 +164,86 @@ function initialsAvatar(name) {
 
 function money(n) {
   return '$' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/* ------------------------------ WhatsApp ------------------------------
+   A one-click "wa.me" deep link — opens WhatsApp (app or web) with the
+   message pre-filled, no account/API/backend needed. This is the practical
+   ceiling without a paid WhatsApp Business API + server setup (which would
+   let the app send automatically, the way the email notifications do); the
+   click still has to come from a person, but for a small school that's a
+   fine trade for zero setup and zero cost. Assumes Liberian numbers stored
+   in local format (e.g. "0770-123-456") when no country code is present,
+   since that's this app's primary audience — international guardians
+   should store their number with a country code already included. */
+function waLink(phone, message) {
+  if (!phone) return '';
+  let digits = String(phone).replace(/\D/g, '');
+  if (digits.startsWith('0')) digits = '231' + digits.slice(1); // local Liberian format -> +231
+  if (!digits) return '';
+  return `https://wa.me/${digits}${message ? '?text=' + encodeURIComponent(message) : ''}`;
+}
+
+// Returns an <a> button, or '' if there's no phone number to link to —
+// callers should tolerate the empty string same as they would any other
+// optional contact method.
+function whatsappBtnHTML(phone, message, label) {
+  const link = waLink(phone, message);
+  if (!link) return '';
+  return `<a href="${link}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm no-print">💬 ${esc(label || 'WhatsApp')}</a>`;
+}
+
+/* ------------------------------ Audit log ------------------------------
+   A lightweight accountability trail for the highest-value actions in a
+   school with more than one admin/teacher touching the data: account
+   changes, payment approve/reject, grade edits, and record deletions.
+   Not every single mutation in the app — that would bury anything worth
+   noticing — just the ones where "who did this, and when" actually matters.
+   Uses the same DB.add()/pushAll() path as every other collection, so it
+   picks up real-time sync and offline-then-reconnect behavior for free;
+   see firestore.rules for why only admins can read it back. */
+function logAudit(action, details) {
+  const who = (typeof Auth !== 'undefined' && Auth.currentUser) ? Auth.currentUser : null;
+  DB.add('auditLog', {
+    action,
+    details: details || '',
+    actorName: who ? who.name : 'System',
+    actorRole: who ? who.role : '',
+    at: new Date().toISOString(),
+  });
+}
+
+/* ------------------------------ Branding ------------------------------
+   Set from Settings → School Branding (meta.schoolLogo / meta.brandColor).
+   The pre-sign-in login screen keeps the default Brightwood mark — under
+   Firebase Sync, meta/school isn't readable until you're signed in, so a
+   custom logo can only apply once you're inside the app. */
+
+// Returns an <img> tag for the school's uploaded logo, or '' if none is
+// set — callers should have a sensible fallback (the school name as text)
+// either way, since this is optional.
+function brandLogoImgHTML(cssClass) {
+  const logo = DB.data.meta && DB.data.meta.schoolLogo;
+  return logo ? `<img src="${logo}" alt="School logo" class="${cssClass || 'h-10 mx-auto'}"/>` : '';
+}
+
+// Applies the school's logo (sidebar mark) and accent color (CSS variable
+// consumed by .btn-primary / .role-tab.active-role / sidebar nav — see
+// css/style.css) app-wide. Call after sign-in and again whenever Settings
+// saves a branding change.
+function applyBranding() {
+  const meta = DB.data.meta || {};
+  const mark = document.getElementById('sidebarLogoMark');
+  if (mark) {
+    mark.innerHTML = meta.schoolLogo
+      ? `<img src="${meta.schoolLogo}" alt="School logo" class="w-full h-full object-cover rounded-lg"/>`
+      : 'BW';
+  }
+  if (meta.brandColor) {
+    document.documentElement.style.setProperty('--brand-primary', meta.brandColor);
+  } else {
+    document.documentElement.style.removeProperty('--brand-primary');
+  }
 }
 
 function classOptions(selectedId) {
