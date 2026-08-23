@@ -302,6 +302,25 @@ function applyBranding() {
   }
 }
 
+// Shows the admin-uploaded school photo (Settings → School Branding) as a
+// faint full-page watermark behind the login screen — see the
+// #loginBgWatermark div in index.html. Safe to call before sign-in (reads
+// only the locally-cached copy of meta — DB.load() already ran by the time
+// this is called in main.js's bootstrap) and again after Settings saves a
+// change, or whenever DB.data.meta gets refreshed from Firestore.
+function applyLoginBackground() {
+  const el = document.getElementById('loginBgWatermark');
+  if (!el) return;
+  const photo = DB.data.meta && DB.data.meta.loginBgPhoto;
+  if (photo) {
+    el.style.backgroundImage = `url(${photo})`;
+    el.style.opacity = '0.14';
+  } else {
+    el.style.backgroundImage = '';
+    el.style.opacity = '0';
+  }
+}
+
 function classOptions(selectedId) {
   return DB.data.classes.map(c => `<option value="${c.id}" ${c.id === selectedId ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
 }
