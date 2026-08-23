@@ -276,7 +276,7 @@ function seedData() {
     },
     subjects, teachers, classes, students, timetable, attendance, exams, grades, feeStructure, invoices, users,
     announcements, assignments, behaviorLogs, books, loans, events, paymentSubmissions, messages,
-    examSchedule, examSeating, submissions,
+    examSchedule, examSeating, submissions, auditLog: [], staffAttendance: [], staffLeave: [],
   };
 }
 
@@ -300,7 +300,7 @@ const DB = {
   // older version of the app, so existing browsers/backups don't crash on
   // the newer modules.
   _migrate() {
-    ['announcements', 'assignments', 'behaviorLogs', 'books', 'loans', 'events', 'paymentSubmissions', 'messages', 'examSchedule', 'examSeating', 'submissions'].forEach((col) => {
+    ['announcements', 'assignments', 'behaviorLogs', 'books', 'loans', 'events', 'paymentSubmissions', 'messages', 'examSchedule', 'examSeating', 'submissions', 'auditLog', 'staffAttendance', 'staffLeave'].forEach((col) => {
       if (!Array.isArray(this.data[col])) this.data[col] = [];
     });
     const metaDefaults = {
